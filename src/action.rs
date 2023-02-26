@@ -1,84 +1,74 @@
 use crate::event::Event;
 use crate::hid_report::HIDReport;
 
-#[derive(Clone, Copy)]
 pub enum KeyboardAction {
     HIDReport(HIDReport),
     LayerAction(LayerAction),
 }
 
-#[derive(Clone, Copy)]
-pub enum KeyAction {
-    HIDReport(HIDReport),
-    LayerAction(LayerAction),
-    CustomAction(&'static dyn CustomAction),
+pub trait Act: Sync {
+    fn event(&self, event: &Event) -> Option<&KeyboardAction>;
 }
 
-impl KeyAction {
-    pub fn event(&self, event: &Event) -> Option<KeyboardAction> {
-        match *self {
-            KeyAction::HIDReport(hid_report) => match event {
-                Event::Press(_) | Event::Pressed(_) => Some(KeyboardAction::HIDReport(hid_report)),
+pub struct Action(pub &'static dyn Act);
+
+pub struct KeyAction(pub KeyboardAction);
+
+impl Act for KeyAction {
+    fn event(&self, event: &Event) -> Option<&KeyboardAction> {
+        match &self.0 {
+            KeyboardAction::HIDReport(_) => match event {
+                Event::Press(_) | Event::Pressed(_) => Some(&self.0),
                 _ => None,
             },
 
-            KeyAction::LayerAction(layer_action) => match event {
+            KeyboardAction::LayerAction(layer_action) => match event {
                 Event::Press(_) => match layer_action {
                     LayerAction::UndoCurrentLayer(_) => None,
-                    _ => Some(KeyboardAction::LayerAction(layer_action)),
+                    _ => Some(&self.0),
                 },
                 Event::Release(_) => match layer_action {
-                    LayerAction::UndoCurrentLayer(_) => {
-                        Some(KeyboardAction::LayerAction(layer_action))
-                    }
+                    LayerAction::UndoCurrentLayer(_) => Some(&self.0),
                     _ => None,
                 },
                 _ => None,
             },
-
-            KeyAction::CustomAction(custom_action) => custom_action.event(event),
         }
     }
 }
 
-#[derive(Clone, Copy)]
+impl Action {
+    pub fn event(&self, event: &Event) -> Option<&KeyboardAction> {
+        self.0.event(event)
+    }
+}
+
 pub enum LayerAction {
     CurrentLayer(usize),
     UndoCurrentLayer(usize),
     DefaultLayer(usize),
 }
 
-pub trait CustomAction: Sync {
-    fn event(&self, event: &Event) -> Option<KeyboardAction>;
-}
-
 #[macro_export]
 macro_rules! kc {
-    ($x: tt) => {{
-        use crate::hid_report::HIDReport;
-        use usbd_human_interface_device::page::Keyboard;
-        KeyAction::HIDReport(HIDReport::Keyboard(Keyboard::$x))
-    }};
+    ($x: tt) => {
+        Action(&KeyAction(kbc!($x)))
+    };
 }
-pub(crate) use kc;
 
 #[macro_export]
 macro_rules! kbc {
     ($x: tt) => {{
-        use crate::hid_report::HIDReport;
-        use usbd_human_interface_device::page::Keyboard;
         KeyboardAction::HIDReport(HIDReport::Keyboard(Keyboard::$x))
     }};
 }
-pub(crate) use kbc;
 
 #[macro_export]
 macro_rules! kcl {
     ($x:literal) => {
-        KeyAction::LayerAction(LayerAction::CurrentLayer($x))
+        Action(&KeyAction(kbcl!($x)))
     };
 }
-pub(crate) use kcl;
 
 #[macro_export]
 macro_rules! kbcl {
@@ -86,15 +76,13 @@ macro_rules! kbcl {
         KeyboardAction::LayerAction(LayerAction::CurrentLayer($x))
     };
 }
-pub(crate) use kbcl;
 
 #[macro_export]
 macro_rules! kdl {
     ($x:literal) => {
-        KeyAction::LayerAction(LayerAction::DefaultLayer($x))
+        Action(&KeyAction(kbdl!($x)))
     };
 }
-pub(crate) use kdl;
 
 #[macro_export]
 macro_rules! kbdl {
@@ -102,15 +90,13 @@ macro_rules! kbdl {
         KeyboardAction::LayerAction(LayerAction::DefaultLayer($x))
     };
 }
-pub(crate) use kbdl;
 
 #[macro_export]
 macro_rules! kul {
     ($x:literal) => {
-        KeyAction::LayerAction(LayerAction::UndoCurrentLayer($x))
+        Action(&KeyAction(kbul!($x)))
     };
 }
-pub(crate) use kul;
 
 #[macro_export]
 macro_rules! kbul {
@@ -118,7 +104,6 @@ macro_rules! kbul {
         KeyboardAction::LayerAction(LayerAction::UndoCurrentLayer($x))
     };
 }
-pub(crate) use kbul;
 
 // use usbd_human_interface_device::page::Keyboard as Keycode;
 

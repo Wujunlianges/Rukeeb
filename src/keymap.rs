@@ -1,36 +1,33 @@
-use crate::action::{KeyAction, KeyboardAction};
+use crate::action::Action;
 use crate::event::{Debouncer, Event};
+use crate::handler::Handler;
 use crate::hid_report::HIDReport;
-use crate::layers::Layers;
-use heapless::Vec;
-
-pub struct Chord {
-    pub layer: usize,
-    pub keys: (usize, usize),
-    pub key_action: KeyAction,
-}
+use crate::register::Register;
 
 pub struct Keymap<const L: usize, const N: usize, const DT: usize> {
-    layers: Layers<L, N>,
-    chords: &'static [Chord],
-    events: [Event; N],
+    layers: &'static [[Action; N]; L],
     debouncers: [Debouncer<DT>; N],
-    hid_reports: Vec<HIDReport, 128>,
+    events: [Event; N],
+    handlers: &'static [Handler<L, N>],
+    register: Register<L, N>,
 }
 
 impl<const L: usize, const N: usize, const DT: usize> Keymap<L, N, DT> {
-    pub fn new(layers: &'static [[KeyAction; N]; L], chords: &'static [Chord]) -> Keymap<L, N, DT> {
+    pub fn new(
+        layers: &'static [[Action; N]; L],
+        handlers: &'static [Handler<L, N>],
+    ) -> Keymap<L, N, DT> {
         Keymap {
-            layers: Layers::<L, N>::new(layers),
-            chords,
-            events: [Event::Released(0); N],
+            layers,
             debouncers: [Debouncer::<DT>::new(); N],
-            hid_reports: Vec::new(),
+            events: [Event::Released(0); N],
+            handlers,
+            register: Register::<L, N>::new(),
         }
     }
 
     pub fn update(&mut self, keys: &[bool]) {
-        self.hid_reports.clear();
+        self.register.clear();
 
         for i in 0..N {
             self.events[i] = match keys[i] {
@@ -39,58 +36,23 @@ impl<const L: usize, const N: usize, const DT: usize> Keymap<L, N, DT> {
             };
         }
 
-        self.chording();
+        for handler in self.handlers {
+            handler.handle(&mut self.events, &mut self.register);
+        }
 
         self.key_actions();
     }
 
     pub fn tick(&self) -> impl Iterator<Item = &HIDReport> + '_ {
-        self.hid_reports.iter()
-    }
-
-    fn chording(&mut self) {
-        for Chord {
-            layer,
-            keys: (key1, key2),
-            key_action,
-        } in self.chords
-        {
-            if *layer == self.layers.current_layer() {
-                match (self.events[*key1], self.events[*key2]) {
-                    (Event::Released(_), _)
-                    | (_, Event::Released(_))
-                    | (Event::Release(_), Event::Release(_)) => {}
-                    (Event::Pressed(_), event)
-                    | (event, Event::Pressed(_))
-                    | (Event::Press(_), event)
-                    | (event, Event::Press(_)) => {
-                        self.events[*key1] = Event::Released(0);
-                        self.events[*key2] = Event::Released(0);
-                        self.key_action(
-                            (key1 + key2) * (key1 + key2 + 1) / 2 + key2 + N,
-                            key_action.event(&event),
-                        )
-                    }
-                }
-            }
-        }
+        self.register.tick()
     }
 
     fn key_actions(&mut self) {
         for i in 0..N {
-            self.key_action(i, self.layers.layer()[i].event(&self.events[i]));
-        }
-    }
-
-    fn key_action(&mut self, id: usize, keyboard_action: Option<KeyboardAction>) {
-        if let Some(keyboard_action) = keyboard_action {
-            match keyboard_action {
-                KeyboardAction::HIDReport(hid_report) => {
-                    self.hid_reports.push(hid_report).ok();
-                }
-                KeyboardAction::LayerAction(layer_action) => {
-                    self.layers.handle_layer_action(id, layer_action)
-                }
+            if let Some(keyboard_action) =
+                self.layers[self.register.current_layer()][i].event(&self.events[i])
+            {
+                self.register.keyboard_action(i, &keyboard_action);
             }
         }
     }
@@ -100,27 +62,28 @@ impl<const L: usize, const N: usize, const DT: usize> Keymap<L, N, DT> {
 mod test {
     use super::*;
     use crate::action::*;
+    use crate::handler::*;
     use crate::hid_report::*;
     use crate::holdtap::*;
-    use crate::layers::*;
-    use usbd_human_interface_device::page::*;
+    use crate::*;
+    use usbd_human_interface_device::page::Keyboard;
 
-    static HT_1: KeyAction = KeyAction::CustomAction(&HoldTap {
-        thold: 50,
-        hold: kbc!(F),
-        tap: kbc!(J),
-    });
-
-    static CHORDS: [Chord; 1] = [Chord {
-        layer: 0,
+    static CHORD1: Chord<2> = Chord {
         keys: (0, 2),
-        key_action: kc!(Q),
-    }];
+        key_actions: [Some(kc!(Q)), None],
+    };
+
+    static COMB1_KEYS: [KeyboardAction; 2] = [kbc!(C), kbc!(D)];
+    static COMB1: Comb<2> = Comb {
+        key: 2,
+        keyboard_actions: [None, Some(&COMB1_KEYS)],
+    };
+    static HANDLERS: [Handler<2, 6>; 2] = [Handler(&CHORD1), Handler(&COMB1)];
 
     #[rustfmt::skip]
-    static LAYERS: [[KeyAction; 6]; 2] = layers![
+    static LAYERS: [[Action; 6]; 2] = layers![
         [
-            kc!(A), HT_1;
+            kc!(A), ht!(50, F, J);
             kc!(A), kcl!(1);
             kc!(A), kdl!(1);
         ],
@@ -139,7 +102,7 @@ mod test {
 
     #[test]
     fn test_keys() {
-        let mut keymap = Keymap::<2, 6, 5>::new(&LAYERS, &CHORDS);
+        let mut keymap = Keymap::<2, 6, 5>::new(&LAYERS, &HANDLERS);
 
         #[rustfmt::skip]
         let mut keys = [false, false, false,
@@ -349,21 +312,29 @@ mod test {
         );
 
         // chording
-        keys[0] = true;
-        keymap.update(&keys);
         keys[2] = true;
-        for i in 0..6 {
+        keymap.update(&keys);
+        keys[0] = true;
+        for _ in 0..6 {
             keymap.update(&keys);
-            if i == 6 {
-                assert_eq!(
-                    keymap.tick().next(),
-                    Some(&HIDReport::Keyboard(Keyboard::A))
-                );
-            }
         }
         assert_eq!(
             keymap.tick().next(),
             Some(&HIDReport::Keyboard(Keyboard::Q))
         );
+        keys[0] = false;
+        keys[2] = false;
+        bounce(&mut keymap, &keys);
+
+        // chording
+        keys[5] = true;
+        keymap.update(&keys);
+        keys[2] = true;
+        for _ in 0..6 {
+            keymap.update(&keys);
+        }
+        let mut it = keymap.tick();
+        assert_eq!(it.next(), Some(&HIDReport::Keyboard(Keyboard::C)));
+        assert_eq!(it.next(), Some(&HIDReport::Keyboard(Keyboard::D)));
     }
 }
