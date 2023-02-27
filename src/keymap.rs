@@ -52,7 +52,7 @@ impl<const L: usize, const N: usize, const DT: usize> Keymap<L, N, DT> {
             if let Some(keyboard_action) =
                 self.layers[self.register.current_layer()][i].event(&self.events[i])
             {
-                self.register.keyboard_action(i, &keyboard_action);
+                self.register.register(i, &keyboard_action);
             }
         }
     }
@@ -70,10 +70,10 @@ mod test {
 
     static CHORD1: Chord<2> = Chord {
         keys: (0, 2),
-        key_actions: [Some(kc!(Q)), None],
+        keyboard_actions: [Some(k!(Q)), None],
     };
 
-    static COMB1_KEYS: [KeyboardAction; 2] = [kbc!(C), kbc!(D)];
+    static COMB1_KEYS: [KeyboardAction; 2] = [k!(C), k!(D)];
     static COMB1: Comb<2> = Comb {
         key: 2,
         keyboard_actions: [None, Some(&COMB1_KEYS)],
@@ -83,14 +83,14 @@ mod test {
     #[rustfmt::skip]
     static LAYERS: [[Action; 6]; 2] = layers![
         [
-            kc!(A), ht!(50, F, J);
-            kc!(A), kcl!(1);
-            kc!(A), kdl!(1);
+            pdk!(A), ht!(50, F, J);
+            pdk!(A), plc!(1);
+            pdk!(A), pld!(1);
         ],
         [
-            kc!(B), kc!(B);
-            kc!(B), kul!(1);
-            kc!(B), kdl!(0);
+            pdk!(B), pdk!(B);
+            pdk!(B), rlu!(1);
+            pdk!(B), pld!(0);
         ]
     ];
 

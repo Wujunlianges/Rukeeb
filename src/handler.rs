@@ -1,4 +1,4 @@
-use crate::action::{Action, KeyboardAction};
+use crate::action::KeyboardAction;
 use crate::event::Event;
 use crate::register::Register;
 
@@ -16,7 +16,7 @@ impl<const L: usize, const N: usize> Handler<L, N> {
 
 pub struct Chord<const L: usize> {
     pub keys: (usize, usize),
-    pub key_actions: [Option<Action>; L],
+    pub keyboard_actions: [Option<KeyboardAction>; L],
 }
 
 impl<const L: usize, const N: usize> Handle<L, N> for Chord<L> {
@@ -25,24 +25,22 @@ impl<const L: usize, const N: usize> Handle<L, N> for Chord<L> {
         let key1 = self.keys.1;
 
         match (events[key0], events[key1]) {
-            (Event::Released(_), _)
-            | (_, Event::Released(_))
-            | (Event::Release(_), Event::Release(_)) => {}
-            (Event::Pressed(_), event)
-            | (event, Event::Pressed(_))
-            | (Event::Press(_), event)
-            | (event, Event::Press(_)) => {
+            (Event::Released(_), _) | (_, Event::Released(_)) => {}
+            (Event::Press(_), _) | (_, Event::Press(_)) => {
                 events[key0] = Event::Released(0);
                 events[key1] = Event::Released(0);
-                if let Some(key_action) = &self.key_actions[register.current_layer()] {
-                    if let Some(keyboard_action) = key_action.event(&event) {
-                        register.keyboard_action(
-                            (key0 + key1) * (key0 + key1 + 1) / 2 + key1 + N,
-                            &keyboard_action,
-                        );
-                    }
+                if let Some(keyboard_action) = &self.keyboard_actions[register.current_layer()] {
+                    register.register(
+                        (key0 + key1) * (key0 + key1 + 1) / 2 + key1 + N,
+                        &keyboard_action,
+                    );
                 }
             }
+            (Event::Pressed(_), _) | (_, Event::Pressed(_)) => {
+                events[key0] = Event::Released(0);
+                events[key1] = Event::Released(0);
+            }
+            (Event::Release(_), Event::Release(_)) => {}
         }
     }
 }
@@ -59,7 +57,7 @@ impl<const L: usize, const N: usize> Handle<L, N> for Comb<L> {
             Event::Press(_) => {
                 if let Some(keyboard_actions) = self.keyboard_actions[register.current_layer()] {
                     for keyboard_action in keyboard_actions {
-                        register.keyboard_action(self.key, keyboard_action);
+                        register.register(self.key, keyboard_action);
                     }
                 }
                 events[self.key] = Event::Released(0);

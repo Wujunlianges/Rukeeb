@@ -22,8 +22,8 @@ macro_rules! ht {
     ($thold:literal, $hold:tt, $tap: tt) => {
         Action(&HoldTap {
             thold: $thold,
-            hold: kbc!($hold),
-            tap: kbc!($tap),
+            hold: k!($hold),
+            tap: k!($tap),
         })
     };
 }

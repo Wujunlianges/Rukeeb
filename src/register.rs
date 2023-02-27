@@ -19,16 +19,16 @@ impl<const L: usize, const N: usize> Register<L, N> {
         }
     }
 
-    pub fn keyboard_action(&mut self, id: usize, keyboard_action: &KeyboardAction) {
+    pub fn register(&mut self, id: usize, keyboard_action: &KeyboardAction) {
         match keyboard_action {
             KeyboardAction::HIDReport(hid_report) => {
                 self.hid_reports.push(*hid_report).ok();
             }
-            KeyboardAction::LayerAction(layer_action) => self.layer_action(id, layer_action),
+            KeyboardAction::LayerAction(layer_action) => self.register_layer(id, layer_action),
         }
     }
 
-    fn layer_action(&mut self, id: usize, layer_action: &LayerAction) {
+    fn register_layer(&mut self, id: usize, layer_action: &LayerAction) {
         match layer_action {
             LayerAction::CurrentLayer(l) => {
                 if *l < L {
