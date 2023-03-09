@@ -20,10 +20,20 @@ impl Act for HoldTap {
 #[macro_export]
 macro_rules! ht {
     ($thold:literal, $hold:tt, $tap: tt) => {
-        Action(&HoldTap {
+        $crate::action::Action(&$crate::holdtap::HoldTap {
             thold: $thold,
-            hold: k!($hold),
-            tap: k!($tap),
+            hold: kb!($hold),
+            tap: kb!($tap),
         })
     };
+}
+
+#[cfg(test)]
+mod test {
+    use crate::*;
+
+    #[test]
+    fn test_ht_macros() {
+        let _test1 = ht!(50, F, J);
+    }
 }

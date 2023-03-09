@@ -1,33 +1,33 @@
 use crate::action::Action;
 use crate::event::{Debouncer, Event};
 use crate::handler::Handler;
-use crate::hid_report::HIDReport;
-use crate::register::Register;
+use crate::report::Report;
+use crate::performer::Performer;
 
 pub struct Keymap<const L: usize, const N: usize, const DT: usize> {
     layers: &'static [[Action; N]; L],
     debouncers: [Debouncer<DT>; N],
     events: [Event; N],
-    handlers: &'static [Handler<L, N>],
-    register: Register<L, N>,
+    handlers: &'static [Handler],
+    performer: Performer,
 }
 
 impl<const L: usize, const N: usize, const DT: usize> Keymap<L, N, DT> {
     pub fn new(
         layers: &'static [[Action; N]; L],
-        handlers: &'static [Handler<L, N>],
+        handlers: &'static [Handler],
     ) -> Keymap<L, N, DT> {
         Keymap {
             layers,
             debouncers: [Debouncer::<DT>::new(); N],
             events: [Event::Released(0); N],
             handlers,
-            register: Register::<L, N>::new(),
+            performer: Performer::new(L),
         }
     }
 
     pub fn update(&mut self, keys: &[bool]) {
-        self.register.clear();
+        self.performer.clear();
 
         for i in 0..N {
             self.events[i] = match keys[i] {
@@ -37,62 +37,114 @@ impl<const L: usize, const N: usize, const DT: usize> Keymap<L, N, DT> {
         }
 
         for handler in self.handlers {
-            handler.handle(&mut self.events, &mut self.register);
+            handler.handle(&mut self.events, &mut self.performer);
         }
 
         self.key_actions();
     }
 
-    pub fn tick(&self) -> impl Iterator<Item = &HIDReport> + '_ {
-        self.register.tick()
+    pub fn tick(&self) -> impl Iterator<Item = &Report> + '_ {
+        self.performer.tick()
     }
 
     fn key_actions(&mut self) {
         for i in 0..N {
             if let Some(keyboard_action) =
-                self.layers[self.register.current_layer()][i].event(&self.events[i])
+                self.layers[self.performer.current_layer()][i].event(&self.events[i])
             {
-                self.register.register(i, &keyboard_action);
+                self.performer.perform(i, &keyboard_action);
             }
         }
     }
 }
 
+// From https://veykril.github.io/tlborm/decl-macros/building-blocks/counting.html#bit-twiddling
+macro_rules! count_tts {
+    () => { 0 };
+    ($odd:tt $($a:tt $b:tt)*) => { (count_tts!($($a)*) << 1) | 1 };
+    ($($a:tt $even:tt)*) => { count_tts!($($a)*) << 1 };
+}
+
+macro_rules! count_layers {
+    ($([$($($x:expr),*);*]),*) => {count_tts!($([$($($x),*);*])*)};
+}
+
+macro_rules! count_keys {
+    ([$($($x0:expr),*);*], $([$($($x:expr),*);*]),*) => {count_tts!($($($x0)*)*)};
+}
+
+macro_rules! layer {
+    ($($($x: expr,)*;)*) => {
+        layer!(@flatten [] $($($x,)*;)*)
+    };
+    (@flatten [$($col:expr,)*] $($x0:expr, $($x:expr,)*;)*) => {
+        layer!(@flatten [$($col,)* $($x0,)*] $($($x,)*;)*)
+    };
+    (@flatten [$($col:expr,)*] $(;)*) => {
+        [$($col,)*]
+    };
+}
+
+#[macro_export]
+macro_rules! layers {
+    ($([$($($x:expr),+ $(,)?);* $(;)?]),* $(,)?) => {
+        [$(layer!($($($x,)*;)*),)*]
+    };
+}
+
+#[macro_export]
+macro_rules! keymap {
+    ([$([$($($x:expr),+ $(,)?);* $(;)?]),* $(,)?], &$handlers:ident, $dt:literal) => {
+        {
+            const N_LAYERS: usize = count_layers!($([$($($x),*);*]),*);
+            const N_KEYS: usize = count_keys!($([$($($x),*);*]),*);
+            Keymap::<N_LAYERS, N_KEYS, $dt>::new(&layers!($([$($($x),*);*]),*), &$handlers)
+        }
+    };
+}
+
 #[cfg(test)]
 mod test {
-    use super::*;
     use crate::action::*;
     use crate::handler::*;
-    use crate::hid_report::*;
-    use crate::holdtap::*;
+    use crate::report::*;
+    use crate::keymap::Keymap;
     use crate::*;
-    use usbd_human_interface_device::page::Keyboard;
 
     static CHORD1: Chord<2> = Chord {
         keys: (0, 2),
-        keyboard_actions: [Some(k!(Q)), None],
+        keyboard_actions: [Some(kb!(Q)), None],
     };
 
-    static COMB1_KEYS: [KeyboardAction; 2] = [k!(C), k!(D)];
+    static COMB1_KEYS: [KeyboardAction; 2] = [kb!(C), kb!(D)];
     static COMB1: Comb<2> = Comb {
         key: 2,
         keyboard_actions: [None, Some(&COMB1_KEYS)],
     };
-    static HANDLERS: [Handler<2, 6>; 2] = [Handler(&CHORD1), Handler(&COMB1)];
+    static HANDLERS: [Handler; 2] = [Handler(&CHORD1), Handler(&COMB1)];
 
-    #[rustfmt::skip]
-    static LAYERS: [[Action; 6]; 2] = layers![
-        [
-            pdk!(A), ht!(50, F, J);
-            pdk!(A), plc!(1);
-            pdk!(A), pld!(1);
-        ],
-        [
-            pdk!(B), pdk!(B);
-            pdk!(B), rlu!(1);
-            pdk!(B), pld!(0);
-        ]
-    ];
+    #[test]
+    fn test_layer_macros() {
+        layers![[kc!(A)]];
+        layers![[kc!(A),]];
+        layers![[kc!(A);]];
+        layers![[kc!(A),;]];
+
+        layers![[kc!(A),;kc!(A)]];
+        layers![[kc!(A),;kc!(A);]];
+
+        layers![[kc!(A),kc!(A);kc!(A),kc!(A),;]];
+
+        keymap!([[
+            kc!(A), ht!(50, F, J);
+            kc!(A), prlc!(1);
+            kc!(A), prld!(1);],
+            [
+            kc!(B), kc!(B);
+            kc!(B), relu!(1);
+            kc!(B), prld!(0);
+            ]], &HANDLERS, 5);
+    }
 
     fn bounce(keymap: &mut Keymap<2, 6, 5>, keys: &[bool]) {
         for _ in 0..5 {
@@ -102,7 +154,16 @@ mod test {
 
     #[test]
     fn test_keys() {
-        let mut keymap = Keymap::<2, 6, 5>::new(&LAYERS, &HANDLERS);
+        let mut keymap: Keymap<2, 6, 5> = keymap!([[
+            kc!(A), ht!(50, F, J);
+            kc!(A), prlc!(1);
+            kc!(A), prld!(1);
+        ],
+        [
+            kc!(B), kc!(B);
+            kc!(B), relu!(1);
+            kc!(B), prld!(0);
+        ]], &HANDLERS, 5);
 
         #[rustfmt::skip]
         let mut keys = [false, false, false,
@@ -120,7 +181,7 @@ mod test {
             keymap.update(&keys);
             assert_eq!(
                 keymap.tick().next(),
-                Some(&HIDReport::Keyboard(Keyboard::A))
+                Some(&Report::Keyboard(Keyboard::A))
             );
         }
 
@@ -130,8 +191,8 @@ mod test {
         for _ in 0..10 {
             keymap.update(&keys);
             let mut it = keymap.tick();
-            assert_eq!(it.next(), Some(&HIDReport::Keyboard(Keyboard::A)));
-            assert_eq!(it.next(), Some(&HIDReport::Keyboard(Keyboard::A)));
+            assert_eq!(it.next(), Some(&Report::Keyboard(Keyboard::A)));
+            assert_eq!(it.next(), Some(&Report::Keyboard(Keyboard::A)));
         }
 
         // clear
@@ -151,7 +212,7 @@ mod test {
             keymap.update(&keys);
             assert_eq!(
                 keymap.tick().next(),
-                Some(&HIDReport::Keyboard(Keyboard::B))
+                Some(&Report::Keyboard(Keyboard::B))
             );
         }
 
@@ -163,7 +224,7 @@ mod test {
             keymap.update(&keys);
             assert_eq!(
                 keymap.tick().next(),
-                Some(&HIDReport::Keyboard(Keyboard::A))
+                Some(&Report::Keyboard(Keyboard::A))
             );
         }
 
@@ -178,7 +239,7 @@ mod test {
             keymap.update(&keys);
             assert_eq!(
                 keymap.tick().next(),
-                Some(&HIDReport::Keyboard(Keyboard::B))
+                Some(&Report::Keyboard(Keyboard::B))
             );
         }
 
@@ -193,7 +254,7 @@ mod test {
             keymap.update(&keys);
             assert_eq!(
                 keymap.tick().next(),
-                Some(&HIDReport::Keyboard(Keyboard::A))
+                Some(&Report::Keyboard(Keyboard::A))
             );
         }
 
@@ -205,7 +266,7 @@ mod test {
             keymap.update(&keys);
             assert_eq!(
                 keymap.tick().next(),
-                Some(&HIDReport::Keyboard(Keyboard::B))
+                Some(&Report::Keyboard(Keyboard::B))
             );
         }
 
@@ -217,7 +278,7 @@ mod test {
             keymap.update(&keys);
             assert_eq!(
                 keymap.tick().next(),
-                Some(&HIDReport::Keyboard(Keyboard::A))
+                Some(&Report::Keyboard(Keyboard::A))
             );
         }
 
@@ -232,7 +293,7 @@ mod test {
             keymap.update(&keys);
             assert_eq!(
                 keymap.tick().next(),
-                Some(&HIDReport::Keyboard(Keyboard::B))
+                Some(&Report::Keyboard(Keyboard::B))
             );
         }
 
@@ -244,7 +305,7 @@ mod test {
             keymap.update(&keys);
             assert_eq!(
                 keymap.tick().next(),
-                Some(&HIDReport::Keyboard(Keyboard::B))
+                Some(&Report::Keyboard(Keyboard::B))
             );
         }
 
@@ -256,7 +317,7 @@ mod test {
             keymap.update(&keys);
             assert_eq!(
                 keymap.tick().next(),
-                Some(&HIDReport::Keyboard(Keyboard::B))
+                Some(&Report::Keyboard(Keyboard::B))
             );
         }
 
@@ -271,7 +332,7 @@ mod test {
             keymap.update(&keys);
             assert_eq!(
                 keymap.tick().next(),
-                Some(&HIDReport::Keyboard(Keyboard::A))
+                Some(&Report::Keyboard(Keyboard::A))
             );
         }
 
@@ -288,7 +349,7 @@ mod test {
         }
         assert_eq!(
             keymap.tick().next(),
-            Some(&HIDReport::Keyboard(Keyboard::F))
+            Some(&Report::Keyboard(Keyboard::F))
         );
 
         // clear
@@ -308,7 +369,7 @@ mod test {
         }
         assert_eq!(
             keymap.tick().next(),
-            Some(&HIDReport::Keyboard(Keyboard::J))
+            Some(&Report::Keyboard(Keyboard::J))
         );
 
         // chording
@@ -320,7 +381,7 @@ mod test {
         }
         assert_eq!(
             keymap.tick().next(),
-            Some(&HIDReport::Keyboard(Keyboard::Q))
+            Some(&Report::Keyboard(Keyboard::Q))
         );
         keys[0] = false;
         keys[2] = false;
@@ -334,7 +395,7 @@ mod test {
             keymap.update(&keys);
         }
         let mut it = keymap.tick();
-        assert_eq!(it.next(), Some(&HIDReport::Keyboard(Keyboard::C)));
-        assert_eq!(it.next(), Some(&HIDReport::Keyboard(Keyboard::D)));
+        assert_eq!(it.next(), Some(&Report::Keyboard(Keyboard::C)));
+        assert_eq!(it.next(), Some(&Report::Keyboard(Keyboard::D)));
     }
 }

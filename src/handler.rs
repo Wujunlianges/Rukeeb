@@ -1,16 +1,16 @@
 use crate::action::KeyboardAction;
 use crate::event::Event;
-use crate::register::Register;
+use crate::performer::Performer;
 
-pub trait Handle<const L: usize, const N: usize>: Sync {
-    fn handle(&self, events: &mut [Event], register: &mut Register<L, N>);
+pub trait Handle: Sync {
+    fn handle(&self, events: &mut [Event], performer: &mut Performer);
 }
 
-pub struct Handler<const L: usize, const N: usize>(pub &'static dyn Handle<L, N>);
+pub struct Handler(pub &'static dyn Handle);
 
-impl<const L: usize, const N: usize> Handler<L, N> {
-    pub fn handle(&self, events: &mut [Event], register: &mut Register<L, N>) {
-        self.0.handle(events, register);
+impl Handler {
+    pub fn handle(&self, events: &mut [Event], performer: &mut Performer) {
+        self.0.handle(events, performer);
     }
 }
 
@@ -19,8 +19,8 @@ pub struct Chord<const L: usize> {
     pub keyboard_actions: [Option<KeyboardAction>; L],
 }
 
-impl<const L: usize, const N: usize> Handle<L, N> for Chord<L> {
-    fn handle(&self, events: &mut [Event], register: &mut Register<L, N>) {
+impl<const L: usize> Handle for Chord<L> {
+    fn handle(&self, events: &mut [Event], performer: &mut Performer) {
         let key0 = self.keys.0;
         let key1 = self.keys.1;
 
@@ -29,9 +29,9 @@ impl<const L: usize, const N: usize> Handle<L, N> for Chord<L> {
             (Event::Press(_), _) | (_, Event::Press(_)) => {
                 events[key0] = Event::Released(0);
                 events[key1] = Event::Released(0);
-                if let Some(keyboard_action) = &self.keyboard_actions[register.current_layer()] {
-                    register.register(
-                        (key0 + key1) * (key0 + key1 + 1) / 2 + key1 + N,
+                if let Some(keyboard_action) = &self.keyboard_actions[performer.current_layer()] {
+                    performer.perform(
+                        (key0 + key1) * (key0 + key1 + 1) / 2 + key1 + events.len(),
                         &keyboard_action,
                     );
                 }
@@ -50,14 +50,14 @@ pub struct Comb<const L: usize> {
     pub keyboard_actions: [Option<&'static [KeyboardAction]>; L],
 }
 
-impl<const L: usize, const N: usize> Handle<L, N> for Comb<L> {
-    fn handle(&self, events: &mut [Event], register: &mut Register<L, N>) {
+impl<const L: usize> Handle for Comb<L> {
+    fn handle(&self, events: &mut [Event], performer: &mut Performer) {
         match events[self.key] {
             Event::Pressed(_) | Event::Released(_) => events[self.key] = Event::Released(0),
             Event::Press(_) => {
-                if let Some(keyboard_actions) = self.keyboard_actions[register.current_layer()] {
+                if let Some(keyboard_actions) = self.keyboard_actions[performer.current_layer()] {
                     for keyboard_action in keyboard_actions {
-                        register.register(self.key, keyboard_action);
+                        performer.perform(self.key, keyboard_action);
                     }
                 }
                 events[self.key] = Event::Released(0);
