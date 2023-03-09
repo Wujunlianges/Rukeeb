@@ -1,8 +1,10 @@
+use heapless::spsc::Producer;
+
 use crate::action::Action;
 use crate::event::{Debouncer, Event};
 use crate::handler::Handler;
-use crate::report::Report;
 use crate::performer::Performer;
+use crate::report::Report;
 
 pub struct Keymap<const L: usize, const N: usize, const DT: usize> {
     layers: &'static [[Action; N]; L],
@@ -16,23 +18,26 @@ impl<const L: usize, const N: usize, const DT: usize> Keymap<L, N, DT> {
     pub fn new(
         layers: &'static [[Action; N]; L],
         handlers: &'static [Handler],
+        reports: Producer<'static, Report, 128>,
     ) -> Keymap<L, N, DT> {
         Keymap {
             layers,
             debouncers: [Debouncer::<DT>::new(); N],
             events: [Event::Released(0); N],
             handlers,
-            performer: Performer::new(L),
+            performer: Performer::new(L, reports),
         }
     }
 
-    pub fn update(&mut self, keys: &[bool]) {
-        self.performer.clear();
-
-        for i in 0..N {
-            self.events[i] = match keys[i] {
-                true => self.debouncers[i].press(),
-                false => self.debouncers[i].release(),
+    pub fn tick(&mut self, keys: &[bool]) {
+        for ((key, debouncer), event) in keys
+            .iter()
+            .zip(self.debouncers.iter_mut())
+            .zip(self.events.iter_mut())
+        {
+            *event = match key {
+                true => debouncer.press(),
+                false => debouncer.release(),
             };
         }
 
@@ -40,18 +45,16 @@ impl<const L: usize, const N: usize, const DT: usize> Keymap<L, N, DT> {
             handler.handle(&mut self.events, &mut self.performer);
         }
 
-        self.key_actions();
+        self.handle();
     }
 
-    pub fn tick(&self) -> impl Iterator<Item = &Report> + '_ {
-        self.performer.tick()
-    }
-
-    fn key_actions(&mut self) {
-        for i in 0..N {
-            if let Some(keyboard_action) =
-                self.layers[self.performer.current_layer()][i].event(&self.events[i])
-            {
+    fn handle(&mut self) {
+        for (i, (action, event)) in self.layers[self.performer.current_layer()]
+            .iter()
+            .zip(self.events.iter())
+            .enumerate()
+        {
+            if let Some(keyboard_action) = action.act(event) {
                 self.performer.perform(i, &keyboard_action);
             }
         }
@@ -94,28 +97,32 @@ macro_rules! layers {
 
 #[macro_export]
 macro_rules! keymap {
-    ([$([$($($x:expr),+ $(,)?);* $(;)?]),* $(,)?], &$handlers:ident, $dt:literal) => {
+    ([$([$($($x:expr),+ $(,)?);* $(;)?]),* $(,)?], $dt:literal, &$handlers:ident, $reports:ident) => {
         {
             const N_LAYERS: usize = count_layers!($([$($($x),*);*]),*);
             const N_KEYS: usize = count_keys!($([$($($x),*);*]),*);
-            Keymap::<N_LAYERS, N_KEYS, $dt>::new(&layers!($([$($($x),*);*]),*), &$handlers)
+            Keymap::<N_LAYERS, N_KEYS, $dt>::new(&layers!($([$($($x),*);*]),*), &$handlers, $reports)
         }
     };
 }
 
 #[cfg(test)]
 mod test {
+    use heapless::spsc::{Consumer, Queue};
+
     use crate::action::*;
     use crate::handler::*;
-    use crate::report::*;
     use crate::keymap::Keymap;
+    use crate::report::*;
     use crate::*;
+
+    static mut Q: Queue<Report, 128> = Queue::new();
+    static mut Q1: Queue<Report, 128> = Queue::new();
 
     static CHORD1: Chord<2> = Chord {
         keys: (0, 2),
         keyboard_actions: [Some(kb!(Q)), None],
     };
-
     static COMB1_KEYS: [KeyboardAction; 2] = [kb!(C), kb!(D)];
     static COMB1: Comb<2> = Comb {
         key: 2,
@@ -135,6 +142,7 @@ mod test {
 
         layers![[kc!(A),kc!(A);kc!(A),kc!(A),;]];
 
+        let p = unsafe { Q.split().0 };
         keymap!([[
             kc!(A), ht!(50, F, J);
             kc!(A), prlc!(1);
@@ -143,17 +151,25 @@ mod test {
             kc!(B), kc!(B);
             kc!(B), relu!(1);
             kc!(B), prld!(0);
-            ]], &HANDLERS, 5);
+            ]], 5, &HANDLERS, p);
     }
 
-    fn bounce(keymap: &mut Keymap<2, 6, 5>, keys: &[bool]) {
+    fn bounce(
+        keymap: &mut Keymap<2, 6, 5>,
+        keys: &[bool; 6],
+        c: &mut Consumer<'static, Report, 128>,
+    ) {
         for _ in 0..5 {
-            keymap.update(keys);
+            keymap.tick(keys);
+        }
+        while c.ready() {
+            c.dequeue();
         }
     }
 
     #[test]
     fn test_keys() {
+        let (p1, mut c1) = unsafe { Q1.split() };
         let mut keymap: Keymap<2, 6, 5> = keymap!([[
             kc!(A), ht!(50, F, J);
             kc!(A), prlc!(1);
@@ -163,239 +179,194 @@ mod test {
             kc!(B), kc!(B);
             kc!(B), relu!(1);
             kc!(B), prld!(0);
-        ]], &HANDLERS, 5);
+        ]], 5, &HANDLERS, p1);
 
-        #[rustfmt::skip]
-        let mut keys = [false, false, false,
-                                   false, false, false];
+        let mut keys = [false, false, false, false, false, false];
 
         for _ in 0..10 {
-            keymap.update(&keys);
+            keymap.tick(&keys);
         }
-        assert_eq!(keymap.tick().next(), None);
+        assert_eq!(c1.dequeue(), None);
 
         // one key
         keys[0] = true;
-        bounce(&mut keymap, &keys);
+        bounce(&mut keymap, &keys, &mut c1);
         for _ in 0..10 {
-            keymap.update(&keys);
-            assert_eq!(
-                keymap.tick().next(),
-                Some(&Report::Keyboard(Keyboard::A))
-            );
+            keymap.tick(&keys);
+            assert_eq!(c1.dequeue(), Some(Report::Keyboard(Keyboard::A)));
         }
 
         // two keys
         keys[1] = true;
-        bounce(&mut keymap, &keys);
+        bounce(&mut keymap, &keys, &mut c1);
         for _ in 0..10 {
-            keymap.update(&keys);
-            let mut it = keymap.tick();
-            assert_eq!(it.next(), Some(&Report::Keyboard(Keyboard::A)));
-            assert_eq!(it.next(), Some(&Report::Keyboard(Keyboard::A)));
+            keymap.tick(&keys);
+            assert_eq!(c1.dequeue(), Some(Report::Keyboard(Keyboard::A)));
+            assert_eq!(c1.dequeue(), Some(Report::Keyboard(Keyboard::A)));
         }
 
         // clear
         keys.fill(false);
-        bounce(&mut keymap, &keys);
+        bounce(&mut keymap, &keys, &mut c1);
         for _ in 0..10 {
-            keymap.update(&keys);
-            assert_eq!(keymap.tick().next(), None);
+            keymap.tick(&keys);
+            assert_eq!(c1.dequeue(), None);
         }
 
         // layer 1
         keys[4] = true;
-        keymap.update(&keys);
+        keymap.tick(&keys);
         keys[0] = true;
-        bounce(&mut keymap, &keys);
+        bounce(&mut keymap, &keys, &mut c1);
         for _ in 0..10 {
-            keymap.update(&keys);
-            assert_eq!(
-                keymap.tick().next(),
-                Some(&Report::Keyboard(Keyboard::B))
-            );
+            keymap.tick(&keys);
+            assert_eq!(c1.dequeue(), Some(Report::Keyboard(Keyboard::B)));
         }
 
         // layer 0
         keys[4] = false;
-        keymap.update(&keys);
-        bounce(&mut keymap, &keys);
+        keymap.tick(&keys);
+        bounce(&mut keymap, &keys, &mut c1);
         for _ in 0..10 {
-            keymap.update(&keys);
-            assert_eq!(
-                keymap.tick().next(),
-                Some(&Report::Keyboard(Keyboard::A))
-            );
+            keymap.tick(&keys);
+            assert_eq!(c1.dequeue(), Some(Report::Keyboard(Keyboard::A)));
         }
 
         // layer 1
         keys[5] = true;
-        keymap.update(&keys);
-        bounce(&mut keymap, &keys);
+        keymap.tick(&keys);
+        bounce(&mut keymap, &keys, &mut c1);
         keys[5] = false;
-        keymap.update(&keys);
-        bounce(&mut keymap, &keys);
+        keymap.tick(&keys);
+        bounce(&mut keymap, &keys, &mut c1);
         for _ in 0..10 {
-            keymap.update(&keys);
-            assert_eq!(
-                keymap.tick().next(),
-                Some(&Report::Keyboard(Keyboard::B))
-            );
+            keymap.tick(&keys);
+            assert_eq!(c1.dequeue(), Some(Report::Keyboard(Keyboard::B)));
         }
 
         // layer 0
         keys[5] = true;
-        keymap.update(&keys);
-        bounce(&mut keymap, &keys);
+        keymap.tick(&keys);
+        bounce(&mut keymap, &keys, &mut c1);
         keys[5] = false;
-        keymap.update(&keys);
-        bounce(&mut keymap, &keys);
+        keymap.tick(&keys);
+        bounce(&mut keymap, &keys, &mut c1);
         for _ in 0..10 {
-            keymap.update(&keys);
-            assert_eq!(
-                keymap.tick().next(),
-                Some(&Report::Keyboard(Keyboard::A))
-            );
+            keymap.tick(&keys);
+            assert_eq!(c1.dequeue(), Some(Report::Keyboard(Keyboard::A)));
         }
 
         // layer 1
         keys[4] = true;
-        keymap.update(&keys);
-        bounce(&mut keymap, &keys);
+        keymap.tick(&keys);
+        bounce(&mut keymap, &keys, &mut c1);
         for _ in 0..10 {
-            keymap.update(&keys);
-            assert_eq!(
-                keymap.tick().next(),
-                Some(&Report::Keyboard(Keyboard::B))
-            );
+            keymap.tick(&keys);
+            assert_eq!(c1.dequeue(), Some(Report::Keyboard(Keyboard::B)));
         }
 
         // layer 0
         keys[5] = true;
-        keymap.update(&keys);
-        bounce(&mut keymap, &keys);
+        keymap.tick(&keys);
+        bounce(&mut keymap, &keys, &mut c1);
         for _ in 0..10 {
-            keymap.update(&keys);
-            assert_eq!(
-                keymap.tick().next(),
-                Some(&Report::Keyboard(Keyboard::A))
-            );
+            keymap.tick(&keys);
+            assert_eq!(c1.dequeue(), Some(Report::Keyboard(Keyboard::A)));
         }
 
         // layer 1
         keys[5] = false;
-        keymap.update(&keys);
-        bounce(&mut keymap, &keys);
+        keymap.tick(&keys);
+        bounce(&mut keymap, &keys, &mut c1);
         keys[5] = true;
-        keymap.update(&keys);
-        bounce(&mut keymap, &keys);
+        keymap.tick(&keys);
+        bounce(&mut keymap, &keys, &mut c1);
         for _ in 0..10 {
-            keymap.update(&keys);
-            assert_eq!(
-                keymap.tick().next(),
-                Some(&Report::Keyboard(Keyboard::B))
-            );
+            keymap.tick(&keys);
+            assert_eq!(c1.dequeue(), Some(Report::Keyboard(Keyboard::B)));
         }
 
         // layer 1
         keys[4] = true;
-        keymap.update(&keys);
-        bounce(&mut keymap, &keys);
+        keymap.tick(&keys);
+        bounce(&mut keymap, &keys, &mut c1);
         for _ in 0..10 {
-            keymap.update(&keys);
-            assert_eq!(
-                keymap.tick().next(),
-                Some(&Report::Keyboard(Keyboard::B))
-            );
+            keymap.tick(&keys);
+            assert_eq!(c1.dequeue(), Some(Report::Keyboard(Keyboard::B)));
         }
 
         // layer 1
         keys[4] = false;
-        keymap.update(&keys);
-        bounce(&mut keymap, &keys);
+        keymap.tick(&keys);
+        bounce(&mut keymap, &keys, &mut c1);
         for _ in 0..10 {
-            keymap.update(&keys);
-            assert_eq!(
-                keymap.tick().next(),
-                Some(&Report::Keyboard(Keyboard::B))
-            );
+            keymap.tick(&keys);
+            assert_eq!(c1.dequeue(), Some(Report::Keyboard(Keyboard::B)));
         }
 
         // layer 0
         keys[5] = false;
-        keymap.update(&keys);
-        bounce(&mut keymap, &keys);
+        keymap.tick(&keys);
+        bounce(&mut keymap, &keys, &mut c1);
         keys[5] = true;
-        keymap.update(&keys);
-        bounce(&mut keymap, &keys);
+        keymap.tick(&keys);
+        bounce(&mut keymap, &keys, &mut c1);
         for _ in 0..10 {
-            keymap.update(&keys);
-            assert_eq!(
-                keymap.tick().next(),
-                Some(&Report::Keyboard(Keyboard::A))
-            );
+            keymap.tick(&keys);
+            assert_eq!(c1.dequeue(), Some(Report::Keyboard(Keyboard::A)));
         }
 
         // clear
         keys.fill(false);
-        keymap.update(&keys);
-        bounce(&mut keymap, &keys);
+        keymap.tick(&keys);
+        bounce(&mut keymap, &keys, &mut c1);
 
         // hold
         keys[3] = true;
-        bounce(&mut keymap, &keys);
+        bounce(&mut keymap, &keys, &mut c1);
         for _ in 0..51 {
-            keymap.update(&keys);
+            keymap.tick(&keys);
         }
-        assert_eq!(
-            keymap.tick().next(),
-            Some(&Report::Keyboard(Keyboard::F))
-        );
+        assert_eq!(c1.dequeue(), Some(Report::Keyboard(Keyboard::F)));
 
         // clear
         keys.fill(false);
-        keymap.update(&keys);
-        bounce(&mut keymap, &keys);
+        keymap.tick(&keys);
+        bounce(&mut keymap, &keys, &mut c1);
 
         // tap
         keys[3] = true;
-        bounce(&mut keymap, &keys);
+        bounce(&mut keymap, &keys, &mut c1);
         for _ in 0..44 {
-            keymap.update(&keys);
+            keymap.tick(&keys);
         }
         keys[3] = false;
         for _ in 0..6 {
-            keymap.update(&keys);
+            keymap.tick(&keys);
         }
-        assert_eq!(
-            keymap.tick().next(),
-            Some(&Report::Keyboard(Keyboard::J))
-        );
+        assert_eq!(c1.dequeue(), Some(Report::Keyboard(Keyboard::J)));
 
         // chording
         keys[2] = true;
-        keymap.update(&keys);
+        keymap.tick(&keys);
         keys[0] = true;
         for _ in 0..6 {
-            keymap.update(&keys);
+            keymap.tick(&keys);
         }
-        assert_eq!(
-            keymap.tick().next(),
-            Some(&Report::Keyboard(Keyboard::Q))
-        );
+        assert_eq!(c1.dequeue(), Some(Report::Keyboard(Keyboard::Q)));
         keys[0] = false;
         keys[2] = false;
-        bounce(&mut keymap, &keys);
+        bounce(&mut keymap, &keys, &mut c1);
 
         // chording
         keys[5] = true;
-        keymap.update(&keys);
+        keymap.tick(&keys);
         keys[2] = true;
         for _ in 0..6 {
-            keymap.update(&keys);
+            keymap.tick(&keys);
         }
-        let mut it = keymap.tick();
-        assert_eq!(it.next(), Some(&Report::Keyboard(Keyboard::C)));
-        assert_eq!(it.next(), Some(&Report::Keyboard(Keyboard::D)));
+
+        assert_eq!(c1.dequeue(), Some(Report::Keyboard(Keyboard::C)));
+        assert_eq!(c1.dequeue(), Some(Report::Keyboard(Keyboard::D)));
     }
 }

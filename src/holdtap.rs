@@ -8,7 +8,7 @@ pub struct HoldTap {
 }
 
 impl Act for HoldTap {
-    fn event(&self, event: &Event) -> Option<&KeyboardAction> {
+    fn act(&self, event: &Event) -> Option<&KeyboardAction> {
         match event {
             Event::Pressed(i) if *i == self.thold => Some(&self.hold),
             Event::Release(i) if *i < self.thold => Some(&self.tap),

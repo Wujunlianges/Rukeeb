@@ -1,16 +1,17 @@
-use crate::event::Event;
-use crate::report::Report;
 pub use usbd_human_interface_device::page::{Consumer, Desktop, Keyboard};
 
+use crate::event::Event;
+use crate::report::Report;
+
 pub trait Act: Sync {
-    fn event(&self, event: &Event) -> Option<&KeyboardAction>;
+    fn act(&self, event: &Event) -> Option<&KeyboardAction>;
 }
 
 pub struct Action(pub &'static dyn Act);
 
 impl Action {
-    pub fn event(&self, event: &Event) -> Option<&KeyboardAction> {
-        self.0.event(event)
+    pub fn act(&self, event: &Event) -> Option<&KeyboardAction> {
+        self.0.act(event)
     }
 }
 
@@ -31,7 +32,7 @@ pub struct ReleaseAction(pub KeyboardAction);
 pub struct ReleasedAction(pub KeyboardAction);
 
 impl Act for PressAction {
-    fn event(&self, event: &Event) -> Option<&KeyboardAction> {
+    fn act(&self, event: &Event) -> Option<&KeyboardAction> {
         match event {
             Event::Press(_) => Some(&self.0),
             _ => None,
@@ -40,7 +41,7 @@ impl Act for PressAction {
 }
 
 impl Act for PressedAction {
-    fn event(&self, event: &Event) -> Option<&KeyboardAction> {
+    fn act(&self, event: &Event) -> Option<&KeyboardAction> {
         match event {
             Event::Press(_) | Event::Pressed(_) => Some(&self.0),
             _ => None,
@@ -49,7 +50,7 @@ impl Act for PressedAction {
 }
 
 impl Act for ReleaseAction {
-    fn event(&self, event: &Event) -> Option<&KeyboardAction> {
+    fn act(&self, event: &Event) -> Option<&KeyboardAction> {
         match event {
             Event::Release(_) => Some(&self.0),
             _ => None,
@@ -58,7 +59,7 @@ impl Act for ReleaseAction {
 }
 
 impl Act for ReleasedAction {
-    fn event(&self, event: &Event) -> Option<&KeyboardAction> {
+    fn act(&self, event: &Event) -> Option<&KeyboardAction> {
         match event {
             Event::Release(_) | Event::Released(_) => Some(&self.0),
             _ => None,

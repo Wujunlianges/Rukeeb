@@ -1,32 +1,35 @@
+use heapless::spsc::Producer;
+
 use crate::action::{KeyboardAction, LayerAction};
 use crate::report::Report;
-use heapless::Vec;
 
 pub struct Performer {
     n_layers: usize,
     current_layer: usize,
     default_layer: usize,
     layer_modifier_id: usize,
-    reports: Vec<Report, 128>,
+    reports: Producer<'static, Report, 128>,
 }
 
 impl Performer {
-    pub fn new(n_layers: usize) -> Performer {
+    pub fn new(n_layers: usize, reports: Producer<'static, Report, 128>) -> Performer {
         Performer {
             n_layers,
             current_layer: 0,
             default_layer: 0,
             layer_modifier_id: 0,
-            reports: Vec::new(),
+            reports,
         }
     }
 
     pub fn perform(&mut self, id: usize, keyboard_action: &KeyboardAction) {
         match keyboard_action {
             KeyboardAction::Report(report) => {
-                self.reports.push(*report).ok();
+                self.reports.enqueue(*report).unwrap();
             }
-            KeyboardAction::LayerAction(layer_action) => self.perform_layer_action(id, layer_action),
+            KeyboardAction::LayerAction(layer_action) => {
+                self.perform_layer_action(id, layer_action)
+            }
         }
     }
 
@@ -53,14 +56,6 @@ impl Performer {
                 }
             }
         }
-    }
-
-    pub fn clear(&mut self) {
-        self.reports.clear();
-    }
-
-    pub fn tick(&self) -> impl Iterator<Item = &Report> + '_ {
-        self.reports.iter()
     }
 
     pub fn current_layer(&self) -> usize {
