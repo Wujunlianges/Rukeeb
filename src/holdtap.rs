@@ -22,18 +22,18 @@ macro_rules! ht {
     ($thold:literal, $hold:tt, $tap: tt) => {
         $crate::action::Action(&$crate::holdtap::HoldTap {
             thold: $thold,
-            hold: kb!($hold),
-            tap: kb!($tap),
+            hold: $crate::kb!($hold),
+            tap: $crate::kb!($tap),
         })
     };
 }
 
 #[cfg(test)]
 mod test {
-    use crate::*;
+    use crate::ht;
 
     #[test]
     fn test_ht_macros() {
-        let _test1 = ht!(50, F, J);
+        ht!(50, F, J);
     }
 }
