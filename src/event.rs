@@ -14,7 +14,7 @@ pub enum State {
 
 impl State {
     pub fn new() -> State {
-        State::Released(1)
+        State::Released(0)
     }
 
     pub fn press(&mut self) -> Event {
@@ -95,12 +95,12 @@ mod test {
     #[test]
     fn hold() {
         let mut debouncer = Debouncer::<5>::new();
-        let mut event = Event::Released(1);
+        let mut event = Event::Released(0);
 
         for _ in 0..10 {
             event = debouncer.release();
         }
-        assert_eq!(event, Event::Released(11));
+        assert_eq!(event, Event::Released(10));
 
         for _ in 0..11 {
             event = debouncer.press();
@@ -116,7 +116,7 @@ mod test {
     #[test]
     fn wobble() {
         let mut debouncer = Debouncer::<5>::new();
-        let mut event = Event::Released(1);
+        let mut event = Event::Released(0);
 
         for _ in 0..10 {
             debouncer.release();
@@ -127,7 +127,7 @@ mod test {
             event = debouncer.press();
         }
 
-        assert_eq!(event, Event::Released(61));
+        assert_eq!(event, Event::Released(60));
     }
 
     #[test]
