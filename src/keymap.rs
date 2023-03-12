@@ -64,34 +64,38 @@ impl<const L: usize, const N: usize, const DT: usize> Keymap<L, N, DT> {
 // From https://veykril.github.io/tlborm/decl-macros/building-blocks/counting.html#bit-twiddling
 macro_rules! count_tts {
     () => { 0 };
-    ($odd:tt $($a:tt $b:tt)*) => { (count_tts!($($a)*) << 1) | 1 };
-    ($($a:tt $even:tt)*) => { count_tts!($($a)*) << 1 };
+    ($odd:tt $($a:tt $b:tt)*) => { ($crate::keymap::count_tts!($($a)*) << 1) | 1 };
+    ($($a:tt $even:tt)*) => { $crate::keymap::count_tts!($($a)*) << 1 };
 }
+pub(crate) use count_tts;
 
 macro_rules! count_layers {
-    ($([$($($x:expr),*);*]),*) => {count_tts!($([$($($x),*);*])*)};
+    ($([$($($x:expr),*);*]),*) => {$crate::keymap::count_tts!($([$($($x),*);*])*)};
 }
+pub(crate) use count_layers;
 
 macro_rules! count_keys {
-    ([$($($x0:expr),*);*], $([$($($x:expr),*);*]),*) => {count_tts!($($($x0)*)*)};
+    ([$($($x0:expr),*);*], $([$($($x:expr),*);*]),*) => {$crate::keymap::count_tts!($($($x0)*)*)};
 }
+pub(crate) use count_keys;
 
 macro_rules! layer {
     ($($($x: expr,)*;)*) => {
-        layer!(@flatten [] $($($x,)*;)*)
+        $crate::keymap::layer!(@flatten [] $($($x,)*;)*)
     };
     (@flatten [$($col:expr,)*] $($x0:expr, $($x:expr,)*;)*) => {
-        layer!(@flatten [$($col,)* $($x0,)*] $($($x,)*;)*)
+        $crate::keymap::layer!(@flatten [$($col,)* $($x0,)*] $($($x,)*;)*)
     };
     (@flatten [$($col:expr,)*] $(;)*) => {
         [$($col,)*]
     };
 }
+pub(crate) use layer;
 
 #[macro_export]
 macro_rules! layers {
     ($([$($($x:expr),+ $(,)?);* $(;)?]),* $(,)?) => {
-        [$(layer!($($($x,)*;)*),)*]
+        [$($crate::keymap::layer!($($($x,)*;)*),)*]
     };
 }
 
@@ -99,25 +103,46 @@ macro_rules! layers {
 macro_rules! keymap {
     ([$([$($($x:expr),+ $(,)?);* $(;)?]),* $(,)?], $dt:literal, &$handlers:ident, $reports:ident) => {
         {
-            const N_LAYERS: usize = count_layers!($([$($($x),*);*]),*);
-            const N_KEYS: usize = count_keys!($([$($($x),*);*]),*);
-            Keymap::<N_LAYERS, N_KEYS, $dt>::new(&layers!($([$($($x),*);*]),*), &$handlers, $reports)
+            const N_LAYERS: usize = $crate::keymap::count_layers!($([$($($x),*);*]),*);
+            const N_KEYS: usize = $crate::keymap::count_keys!($([$($($x),*);*]),*);
+            Keymap::<N_LAYERS, N_KEYS, $dt>::new(&$crate::layers!($([$($($x),*);*]),*), &$handlers, $reports)
         }
     };
 }
 
 #[cfg(test)]
-mod test {
-    use heapless::spsc::{Consumer, Queue};
+#[no_implicit_prelude]
+mod test_macros {
+    extern crate heapless;
+    extern crate std;
 
-    use crate::action::*;
-    use crate::handler::*;
+    macro_rules! layer {
+        ($($($x: expr,)*;)*) => {
+            "Wrong macro!"
+        };
+    }
+    macro_rules! count_tts {
+        () => {
+            "Wrong macro!"
+        };
+        ($odd:tt $($a:tt $b:tt)*) => {
+            "Wrong macro!"
+        };
+        ($($a:tt $even:tt)*) => {
+            "Wrong macro!"
+        };
+    }
+
+    use heapless::spsc::Queue;
+    use std::option::Option::{None, Some};
+
+    use crate::action::KeyboardAction;
+    use crate::handler::{Chord, Comb, Handler};
     use crate::keymap::Keymap;
-    use crate::report::*;
+    use crate::report::Report;
     use crate::*;
 
     static mut Q: Queue<Report, 128> = Queue::new();
-    static mut Q1: Queue<Report, 128> = Queue::new();
 
     static CHORD1: Chord<2> = Chord {
         keys: (0, 2),
@@ -153,6 +178,30 @@ mod test {
             kc!(B), prld!(0);
             ]], 5, &HANDLERS, p);
     }
+}
+
+#[cfg(test)]
+mod test {
+    use heapless::spsc::{Consumer, Queue};
+
+    use crate::action::*;
+    use crate::handler::*;
+    use crate::keymap::Keymap;
+    use crate::report::*;
+    use crate::*;
+
+    static mut Q: Queue<Report, 128> = Queue::new();
+
+    static CHORD1: Chord<2> = Chord {
+        keys: (0, 2),
+        keyboard_actions: [Some(kb!(Q)), None],
+    };
+    static COMB1_KEYS: [KeyboardAction; 2] = [kb!(C), kb!(D)];
+    static COMB1: Comb<2> = Comb {
+        key: 2,
+        keyboard_actions: [None, Some(&COMB1_KEYS)],
+    };
+    static HANDLERS: [Handler; 2] = [Handler(&CHORD1), Handler(&COMB1)];
 
     fn bounce(
         keymap: &mut Keymap<2, 6, 5>,
@@ -169,7 +218,7 @@ mod test {
 
     #[test]
     fn test_keys() {
-        let (p1, mut c1) = unsafe { Q1.split() };
+        let (p1, mut c1) = unsafe { Q.split() };
         let mut keymap: Keymap<2, 6, 5> = keymap!([[
             kc!(A), ht!(50, F, J);
             kc!(A), prlc!(1);

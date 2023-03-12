@@ -29,6 +29,7 @@ macro_rules! ht {
 }
 
 #[cfg(test)]
+#[no_implicit_prelude]
 mod test {
     use crate::ht;
 
