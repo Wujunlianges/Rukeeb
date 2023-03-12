@@ -3,14 +3,14 @@ use crate::event::Event;
 use crate::performer::Performer;
 
 pub trait Handle: Sync {
-    fn handle(&self, events: &mut [Event], performer: &mut Performer);
+    fn handle(&self, id: usize, events: &mut [Event], performer: &mut Performer);
 }
 
 pub struct Handler(pub &'static dyn Handle);
 
 impl Handler {
-    pub fn handle(&self, events: &mut [Event], performer: &mut Performer) {
-        self.0.handle(events, performer);
+    pub fn handle(&self, id: usize, events: &mut [Event], performer: &mut Performer) {
+        self.0.handle(id, events, performer);
     }
 }
 
@@ -20,7 +20,7 @@ pub struct Chord<const L: usize> {
 }
 
 impl<const L: usize> Handle for Chord<L> {
-    fn handle(&self, events: &mut [Event], performer: &mut Performer) {
+    fn handle(&self, id: usize, events: &mut [Event], performer: &mut Performer) {
         let key0 = self.keys.0;
         let key1 = self.keys.1;
 
@@ -30,10 +30,7 @@ impl<const L: usize> Handle for Chord<L> {
                 events[key0] = Event::Released(0);
                 events[key1] = Event::Released(0);
                 if let Some(keyboard_action) = &self.keyboard_actions[performer.current_layer()] {
-                    performer.perform(
-                        (key0 + key1) * (key0 + key1 + 1) / 2 + key1 + events.len(),
-                        &keyboard_action,
-                    );
+                    performer.perform(id, &keyboard_action);
                 }
             }
             (Event::Pressed(_), _) | (_, Event::Pressed(_)) => {
@@ -51,7 +48,7 @@ pub struct Comb<const L: usize> {
 }
 
 impl<const L: usize> Handle for Comb<L> {
-    fn handle(&self, events: &mut [Event], performer: &mut Performer) {
+    fn handle(&self, _: usize, events: &mut [Event], performer: &mut Performer) {
         match events[self.key] {
             Event::Pressed(_) | Event::Released(_) => events[self.key] = Event::Released(0),
             Event::Press(_) => {

@@ -41,8 +41,8 @@ impl<const L: usize, const N: usize, const DT: usize> Keymap<L, N, DT> {
             };
         }
 
-        for handler in self.handlers {
-            handler.handle(&mut self.events, &mut self.performer);
+        for (i, handler) in self.handlers.iter().enumerate() {
+            handler.handle(N + i, &mut self.events, &mut self.performer);
         }
 
         self.handle();
