@@ -1,38 +1,52 @@
-pub use usbd_human_interface_device::page::{Consumer, Desktop, Keyboard};
-
 use crate::event::Event;
 use crate::report::Report;
 
 pub trait Act: Sync {
-    fn act(&self, event: &Event) -> Option<&KeyboardAction>;
+    fn act(&self, event: &Event) -> Option<&Action>;
 }
 
-pub struct Action(pub &'static dyn Act);
+pub enum Action {
+    Report(Report),
+    Layer(Layer),
+}
 
-impl Action {
-    pub fn act(&self, event: &Event) -> Option<&KeyboardAction> {
-        self.0.act(event)
+pub enum Layer {
+    Default(usize),
+    Current(usize),
+    UndoCurrent(usize),
+}
+
+pub struct PressAction(Action);
+pub struct PressedAction(Action);
+pub struct ReleaseAction(Action);
+pub struct ReleasedAction(Action);
+
+impl PressAction {
+    pub const fn new(action: Action) -> PressAction {
+        PressAction(action)
     }
 }
 
-pub enum KeyboardAction {
-    Report(Report),
-    LayerAction(LayerAction),
+impl PressedAction {
+    pub const fn new(action: Action) -> PressedAction {
+        PressedAction(action)
+    }
 }
 
-pub enum LayerAction {
-    DefaultLayer(usize),
-    CurrentLayer(usize),
-    UndoCurrentLayer(usize),
+impl ReleaseAction {
+    pub const fn new(action: Action) -> ReleaseAction {
+        ReleaseAction(action)
+    }
 }
 
-pub struct PressAction(pub KeyboardAction);
-pub struct PressedAction(pub KeyboardAction);
-pub struct ReleaseAction(pub KeyboardAction);
-pub struct ReleasedAction(pub KeyboardAction);
+impl ReleasedAction {
+    pub const fn new(action: Action) -> ReleasedAction {
+        ReleasedAction(action)
+    }
+}
 
 impl Act for PressAction {
-    fn act(&self, event: &Event) -> Option<&KeyboardAction> {
+    fn act(&self, event: &Event) -> Option<&Action> {
         match event {
             Event::Press(_) => Some(&self.0),
             _ => None,
@@ -41,7 +55,7 @@ impl Act for PressAction {
 }
 
 impl Act for PressedAction {
-    fn act(&self, event: &Event) -> Option<&KeyboardAction> {
+    fn act(&self, event: &Event) -> Option<&Action> {
         match event {
             Event::Press(_) | Event::Pressed(_) => Some(&self.0),
             _ => None,
@@ -50,7 +64,7 @@ impl Act for PressedAction {
 }
 
 impl Act for ReleaseAction {
-    fn act(&self, event: &Event) -> Option<&KeyboardAction> {
+    fn act(&self, event: &Event) -> Option<&Action> {
         match event {
             Event::Release(_) => Some(&self.0),
             _ => None,
@@ -59,7 +73,7 @@ impl Act for ReleaseAction {
 }
 
 impl Act for ReleasedAction {
-    fn act(&self, event: &Event) -> Option<&KeyboardAction> {
+    fn act(&self, event: &Event) -> Option<&Action> {
         match event {
             Event::Release(_) | Event::Released(_) => Some(&self.0),
             _ => None,
@@ -67,14 +81,14 @@ impl Act for ReleasedAction {
     }
 }
 
-// Keyboard Action Macros
+// Action Macros
 
 // Keyboard Report
 #[macro_export]
 macro_rules! kb {
     ($x: tt) => {
-        $crate::action::KeyboardAction::Report($crate::report::Report::Keyboard(
-            $crate::action::Keyboard::$x,
+        $crate::action::Action::Report($crate::report::Report::Keyboard(
+            $crate::report::Keyboard::$x,
         ))
     };
 }
@@ -83,8 +97,8 @@ macro_rules! kb {
 #[macro_export]
 macro_rules! cu {
     ($x: tt) => {
-        $crate::action::KeyboardAction::Report($crate::report::Report::Consumer(
-            $crate::action::Consumer::$x,
+        $crate::action::Action::Report($crate::report::Report::Consumer(
+            $crate::report::Consumer::$x,
         ))
     };
 }
@@ -93,35 +107,31 @@ macro_rules! cu {
 #[macro_export]
 macro_rules! dk {
     ($x: tt) => {
-        $crate::action::KeyboardAction::Report($crate::report::Report::Desktop(
-            $crate::action::Desktop::$x,
-        ))
+        $crate::action::Action::Report($crate::report::Report::Desktop($crate::report::Desktop::$x))
     };
 }
 
-// LayerAction DefaultLayer
+// Layer Default
 #[macro_export]
 macro_rules! ld {
     ($x: tt) => {
-        $crate::action::KeyboardAction::LayerAction($crate::action::LayerAction::DefaultLayer($x))
+        $crate::action::Action::Layer($crate::action::Layer::Default($x))
     };
 }
 
-// LayerAction CurrentLayer
+// Layer Current
 #[macro_export]
 macro_rules! lc {
     ($x: tt) => {
-        $crate::action::KeyboardAction::LayerAction($crate::action::LayerAction::CurrentLayer($x))
+        $crate::action::Action::Layer($crate::action::Layer::Current($x))
     };
 }
 
-// LayerAction UndoCurrentLayer
+// Layer Undo
 #[macro_export]
 macro_rules! lu {
     ($x: tt) => {
-        $crate::action::KeyboardAction::LayerAction($crate::action::LayerAction::UndoCurrentLayer(
-            $x,
-        ))
+        $crate::action::Action::Layer($crate::action::Layer::UndoCurrent($x))
     };
 }
 
@@ -131,7 +141,7 @@ macro_rules! lu {
 #[macro_export]
 macro_rules! pdkb {
     ($x:tt) => {
-        $crate::action::Action(&$crate::action::PressedAction($crate::kb!($x)))
+        $crate::action::PressedAction::new($crate::kb!($x))
     };
 }
 
@@ -139,7 +149,7 @@ macro_rules! pdkb {
 #[macro_export]
 macro_rules! prcu {
     ($x:tt) => {
-        $crate::action::Action(&$crate::action::PressAction($crate::cu!($x)))
+        $crate::action::PressAction::new($crate::cu!($x))
     };
 }
 
@@ -147,7 +157,7 @@ macro_rules! prcu {
 #[macro_export]
 macro_rules! pdcu {
     ($x:tt) => {
-        $crate::action::Action(&$crate::action::PressedAction($crate::cu!($x)))
+        $crate::action::PressedAction::new($crate::cu!($x))
     };
 }
 
@@ -155,7 +165,7 @@ macro_rules! pdcu {
 #[macro_export]
 macro_rules! prdk {
     ($x:tt) => {
-        $crate::action::Action(&$crate::action::PressAction($crate::dk!($x)))
+        $crate::action::PressAction::new($crate::dk!($x))
     };
 }
 
@@ -163,31 +173,31 @@ macro_rules! prdk {
 #[macro_export]
 macro_rules! pddk {
     ($x:tt) => {
-        $crate::action::Action(&$crate::action::PressedAction($crate::dk!($x)))
+        $crate::action::PressedAction::new($crate::dk!($x))
     };
 }
 
-// Press LayerAction DefaultLayer
+// Press Layer Default
 #[macro_export]
 macro_rules! prld {
     ($x:tt) => {
-        $crate::action::Action(&$crate::action::PressAction($crate::ld!($x)))
+        $crate::action::PressAction::new($crate::ld!($x))
     };
 }
 
-// Press LayerAction CurrentLayer
+// Press Layer Current
 #[macro_export]
 macro_rules! prlc {
     ($x:tt) => {
-        $crate::action::Action(&$crate::action::PressAction($crate::lc!($x)))
+        $crate::action::PressAction::new($crate::lc!($x))
     };
 }
 
-// Press LayerAction UndoCurrentLayer
+// Press Layer Undo
 #[macro_export]
 macro_rules! relu {
     ($x:tt) => {
-        $crate::action::Action(&$crate::action::ReleaseAction($crate::lu!($x)))
+        $crate::action::ReleaseAction::new($crate::lu!($x))
     };
 }
 

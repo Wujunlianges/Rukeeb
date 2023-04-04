@@ -1,4 +1,6 @@
-use crate::action::KeyboardAction;
+use core::sync::atomic::{AtomicBool, Ordering};
+
+use crate::action::Action;
 use crate::event::Event;
 use crate::performer::Performer;
 
@@ -6,60 +8,116 @@ pub trait Handle: Sync {
     fn handle(&self, id: usize, events: &mut [Event], performer: &mut Performer);
 }
 
-pub struct Handler(pub &'static dyn Handle);
-
-impl Handler {
-    pub fn handle(&self, id: usize, events: &mut [Event], performer: &mut Performer) {
-        self.0.handle(id, events, performer);
-    }
+pub struct Chord<const L: usize> {
+    is_triggered: AtomicBool,
+    ids: (usize, usize),
+    actions: [Option<Action>; L],
 }
 
-pub struct Chord<const L: usize> {
-    pub keys: (usize, usize),
-    pub keyboard_actions: [Option<KeyboardAction>; L],
+impl<const L: usize> Chord<L> {
+    pub const fn new(ids: (usize, usize), actions: [Option<Action>; L]) -> Chord<L> {
+        Chord {
+            is_triggered: AtomicBool::new(false),
+            ids,
+            actions,
+        }
+    }
 }
 
 impl<const L: usize> Handle for Chord<L> {
     fn handle(&self, id: usize, events: &mut [Event], performer: &mut Performer) {
-        let key0 = self.keys.0;
-        let key1 = self.keys.1;
+        let (id0, id1) = self.ids;
 
-        match (events[key0], events[key1]) {
-            (Event::Released(_), _) | (_, Event::Released(_)) => {}
-            (Event::Press(_), _) | (_, Event::Press(_)) => {
-                events[key0] = Event::Released(0);
-                events[key1] = Event::Released(0);
-                if let Some(keyboard_action) = &self.keyboard_actions[performer.current_layer()] {
-                    performer.perform(id, &keyboard_action);
+        if let Some(action) = &self.actions[performer.current_layer()] {
+            match self.is_triggered.load(Ordering::Relaxed) {
+                false => match (events[id0], events[id1]) {
+                    (Event::Press(_), Event::Pressed(_))
+                    | (Event::Pressed(_), Event::Press(_))
+                    | (Event::Press(_), Event::Press(_)) => {
+                        self.is_triggered.store(true, Ordering::Relaxed);
+                        performer.perform(id, action);
+                        events[id0] = Event::Released(0);
+                        events[id1] = Event::Released(0);
+                    }
+                    _ => {}
+                },
+                true => {
+                    match (events[id0], events[id1]) {
+                        (Event::Release(_), Event::Released(_))
+                        | (Event::Released(_), Event::Release(_))
+                        | (Event::Release(_), Event::Release(_)) => {
+                            self.is_triggered.store(false, Ordering::Relaxed);
+                        }
+                        _ => {}
+                    }
+                    events[id0] = Event::Released(0);
+                    events[id1] = Event::Released(0);
                 }
             }
-            (Event::Pressed(_), _) | (_, Event::Pressed(_)) => {
-                events[key0] = Event::Released(0);
-                events[key1] = Event::Released(0);
-            }
-            (Event::Release(_), Event::Release(_)) => {}
         }
     }
 }
 
 pub struct Comb<const L: usize> {
-    pub key: usize,
-    pub keyboard_actions: [Option<&'static [KeyboardAction]>; L],
+    pub id: usize,
+    pub actions: [Option<&'static [Action]>; L],
+}
+
+impl<const L: usize> Comb<L> {
+    pub const fn new(id: usize, actions: [Option<&'static [Action]>; L]) -> Comb<L> {
+        Comb { id, actions }
+    }
 }
 
 impl<const L: usize> Handle for Comb<L> {
     fn handle(&self, _: usize, events: &mut [Event], performer: &mut Performer) {
-        match events[self.key] {
-            Event::Pressed(_) | Event::Released(_) => events[self.key] = Event::Released(0),
-            Event::Press(_) => {
-                if let Some(keyboard_actions) = self.keyboard_actions[performer.current_layer()] {
-                    for keyboard_action in keyboard_actions {
-                        performer.perform(self.key, keyboard_action);
-                    }
+        if let Some(actions) = self.actions[performer.current_layer()] {
+            if let Event::Press(_) = events[self.id] {
+                for action in actions {
+                    performer.perform(self.id, action);
                 }
-                events[self.key] = Event::Released(0);
             }
-            _ => {}
         }
+        events[self.id] = Event::Released(0);
+    }
+}
+
+#[macro_export]
+macro_rules! chrd {
+    ($i1:literal, $i2:literal, [$($x:expr),* $(,)?]) => {
+        $crate::handler::Chord::new(($i1, $i2), [$($x),*])
+    };
+}
+
+#[macro_export]
+macro_rules! comb {
+    ($i: literal, [$($x:expr),* $(,)?]) => {
+        $crate::handler::Comb::new($i, [$($x),*])
+    };
+}
+
+#[macro_export]
+macro_rules! handlers {
+    ($($x:expr),* $(,)?) => {
+        [$(&$x),*]
+    };
+}
+
+#[cfg(test)]
+#[no_implicit_prelude]
+mod test {
+    use ::core::option::Option::{None, Some};
+    use ::core::sync::atomic::AtomicBool;
+
+    use crate::action::Action;
+    use crate::handler::{Chord, Comb, Handle};
+    use crate::{handlers, kb};
+
+    static CHORD1: Chord<2> = chrd!(0, 2, [Some(kb!(Q)), None]);
+    static COMB1: Comb<2> = comb!(2, [None, Some(&[kb!(C), kb!(D)])]);
+
+    #[test]
+    fn test_handler_macros() {
+        let _: [&'static dyn Handle; 2] = handlers![CHORD1, COMB1];
     }
 }

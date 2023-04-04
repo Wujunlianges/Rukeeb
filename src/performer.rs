@@ -1,13 +1,13 @@
 use heapless::spsc::Producer;
 
-use crate::action::{KeyboardAction, LayerAction};
+use crate::action::{Action, Layer};
 use crate::report::Report;
 
 pub struct Performer {
     n_layers: usize,
     current_layer: usize,
     default_layer: usize,
-    layer_modifier_id: usize,
+    id: usize,
     reports: Producer<'static, Report, 128>,
 }
 
@@ -17,41 +17,37 @@ impl Performer {
             n_layers,
             current_layer: 0,
             default_layer: 0,
-            layer_modifier_id: 0,
+            id: 0,
             reports,
         }
     }
 
-    pub fn perform(&mut self, id: usize, keyboard_action: &KeyboardAction) {
-        match keyboard_action {
-            KeyboardAction::Report(report) => {
+    pub fn perform(&mut self, id: usize, action: &Action) {
+        match action {
+            Action::Report(report) => {
                 self.reports.enqueue(*report).unwrap();
             }
-            KeyboardAction::LayerAction(layer_action) => {
-                self.perform_layer_action(id, layer_action)
-            }
+            Action::Layer(layer) => self.perform_layer(id, layer),
         }
     }
 
-    fn perform_layer_action(&mut self, id: usize, layer_action: &LayerAction) {
-        match layer_action {
-            LayerAction::CurrentLayer(l) => {
+    fn perform_layer(&mut self, id: usize, layer: &Layer) {
+        match layer {
+            Layer::Current(l) => {
                 if *l < self.n_layers {
                     self.current_layer = *l;
-                    self.layer_modifier_id = id;
-                } else {
+                    self.id = id;
                 }
             }
-            LayerAction::DefaultLayer(l) => {
+            Layer::Default(l) => {
                 if *l < self.n_layers {
                     self.current_layer = *l;
                     self.default_layer = *l;
-                    self.layer_modifier_id = id;
-                } else {
+                    self.id = id;
                 }
             }
-            LayerAction::UndoCurrentLayer(l) => {
-                if self.layer_modifier_id == id && self.current_layer == *l {
+            Layer::UndoCurrent(l) => {
+                if self.id == id && self.current_layer == *l {
                     self.current_layer = self.default_layer
                 }
             }

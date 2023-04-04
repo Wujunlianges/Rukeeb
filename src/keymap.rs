@@ -1,41 +1,41 @@
 use heapless::spsc::Producer;
 
-use crate::action::Action;
+use crate::action::Act;
 use crate::event::{Debouncer, Event};
-use crate::handler::Handler;
+use crate::handler::Handle;
 use crate::performer::Performer;
 use crate::report::Report;
 
 pub struct Keymap<const L: usize, const N: usize, const DT: usize> {
-    layers: &'static [[Action; N]; L],
+    layers: &'static [[&'static dyn Act; N]; L],
     debouncers: [Debouncer<DT>; N],
     events: [Event; N],
-    handlers: &'static [Handler],
+    handlers: &'static [&'static dyn Handle],
     performer: Performer,
 }
 
 impl<const L: usize, const N: usize, const DT: usize> Keymap<L, N, DT> {
     pub fn new(
-        layers: &'static [[Action; N]; L],
-        handlers: &'static [Handler],
+        layers: &'static [[&'static dyn Act; N]; L],
+        handlers: &'static [&'static dyn Handle],
         reports: Producer<'static, Report, 128>,
     ) -> Keymap<L, N, DT> {
         Keymap {
             layers,
-            debouncers: [Debouncer::<DT>::new(); N],
-            events: [Event::Released(0); N],
+            debouncers: [Debouncer::new(); N],
+            events: [Event::new(); N],
             handlers,
             performer: Performer::new(L, reports),
         }
     }
 
-    pub fn tick(&mut self, keys: &[bool]) {
-        for ((key, debouncer), event) in keys
+    pub fn tick(&mut self, switches: &[bool]) {
+        for ((switch, debouncer), event) in switches
             .iter()
             .zip(self.debouncers.iter_mut())
             .zip(self.events.iter_mut())
         {
-            *event = match key {
+            *event = match switch {
                 true => debouncer.press(),
                 false => debouncer.release(),
             };
@@ -49,13 +49,13 @@ impl<const L: usize, const N: usize, const DT: usize> Keymap<L, N, DT> {
     }
 
     fn handle(&mut self) {
-        for (i, (action, event)) in self.layers[self.performer.current_layer()]
+        for (i, (key, event)) in self.layers[self.performer.current_layer()]
             .iter()
             .zip(self.events.iter())
             .enumerate()
         {
-            if let Some(keyboard_action) = action.act(event) {
-                self.performer.perform(i, &keyboard_action);
+            if let Some(action) = key.act(event) {
+                self.performer.perform(i, action);
             }
         }
     }
@@ -105,7 +105,8 @@ macro_rules! keymap {
         {
             const N_LAYERS: usize = $crate::keymap::count_layers!($([$($($x),*);*]),*);
             const N_KEYS: usize = $crate::keymap::count_keys!($([$($($x),*);*]),*);
-            Keymap::<N_LAYERS, N_KEYS, $dt>::new(&$crate::layers!($([$($($x),*);*]),*), &$handlers, $reports)
+            const LAYERS: [[&'static dyn $crate::action::Act; N_KEYS] ;N_LAYERS] = $crate::layers!($([$($(&$x),*);*]),*);
+            Keymap::<N_LAYERS, N_KEYS, $dt>::new(&LAYERS, &$handlers, $reports)
         }
     };
 }
@@ -113,6 +114,7 @@ macro_rules! keymap {
 #[cfg(test)]
 #[no_implicit_prelude]
 mod test_macros {
+    extern crate core;
     extern crate heapless;
     extern crate std;
 
@@ -133,27 +135,21 @@ mod test_macros {
         };
     }
 
+    use core::sync::atomic::AtomicBool;
     use heapless::spsc::Queue;
     use std::option::Option::{None, Some};
 
-    use crate::action::KeyboardAction;
-    use crate::handler::{Chord, Comb, Handler};
+    use crate::action::Action;
+    use crate::handler::{Chord, Comb, Handle};
     use crate::keymap::Keymap;
     use crate::report::Report;
     use crate::*;
 
     static mut Q: Queue<Report, 128> = Queue::new();
 
-    static CHORD1: Chord<2> = Chord {
-        keys: (0, 2),
-        keyboard_actions: [Some(kb!(Q)), None],
-    };
-    static COMB1_KEYS: [KeyboardAction; 2] = [kb!(C), kb!(D)];
-    static COMB1: Comb<2> = Comb {
-        key: 2,
-        keyboard_actions: [None, Some(&COMB1_KEYS)],
-    };
-    static HANDLERS: [Handler; 2] = [Handler(&CHORD1), Handler(&COMB1)];
+    static CHORD1: Chord<2> = chrd!(0, 2, [Some(kb!(Q)), None]);
+    static COMB1: Comb<2> = comb!(2, [None, Some(&[kb!(C), kb!(D)])]);
+    static HANDLERS: [&'static dyn Handle; 2] = handlers![CHORD1, COMB1];
 
     #[test]
     fn test_layer_macros() {
@@ -169,7 +165,7 @@ mod test_macros {
 
         let p = unsafe { Q.split().0 };
         keymap!([[
-            kc!(A), ht!(50, F, J);
+            kc!(A), ht!(50, kb!(F), kb!(J));
             kc!(A), prlc!(1);
             kc!(A), prld!(1);],
             [
@@ -182,6 +178,8 @@ mod test_macros {
 
 #[cfg(test)]
 mod test {
+    use core::sync::atomic::AtomicBool;
+
     use heapless::spsc::{Consumer, Queue};
 
     use crate::action::*;
@@ -192,35 +190,69 @@ mod test {
 
     static mut Q: Queue<Report, 128> = Queue::new();
 
-    static CHORD1: Chord<2> = Chord {
-        keys: (0, 2),
-        keyboard_actions: [Some(kb!(Q)), None],
-    };
-    static COMB1_KEYS: [KeyboardAction; 2] = [kb!(C), kb!(D)];
-    static COMB1: Comb<2> = Comb {
-        key: 2,
-        keyboard_actions: [None, Some(&COMB1_KEYS)],
-    };
-    static HANDLERS: [Handler; 2] = [Handler(&CHORD1), Handler(&COMB1)];
+    static CHORD1: Chord<2> = chrd!(0, 2, [Some(kb!(Q)), None]);
+    static COMB1: Comb<2> = comb!(2, [None, Some(&[kb!(C), kb!(D)])]);
+    static HANDLERS: [&'static dyn Handle; 2] = handlers![CHORD1, COMB1];
 
-    fn bounce(
-        keymap: &mut Keymap<2, 6, 5>,
-        keys: &[bool; 6],
-        c: &mut Consumer<'static, Report, 128>,
-    ) {
-        for _ in 0..5 {
-            keymap.tick(keys);
+    macro_rules! r {
+        ($x:tt) => {
+            Report::Keyboard(Keyboard::$x)
+        };
+    }
+
+    struct Tester<const L: usize, const N: usize, const DT: usize> {
+        keymap: Keymap<L, N, DT>,
+        c: Consumer<'static, Report, 128>,
+    }
+
+    impl<const L: usize, const N: usize, const DT: usize> Tester<L, N, DT> {
+        pub fn new(
+            keymap: Keymap<L, N, DT>,
+            c: Consumer<'static, Report, 128>,
+        ) -> Tester<L, N, DT> {
+            Tester { keymap, c }
         }
-        while c.ready() {
-            c.dequeue();
+
+        fn reset(&mut self) {
+            for _ in 0..(DT + 1) {
+                self.keymap.tick(&[false; N]);
+            }
+            while self.c.ready() {
+                self.c.dequeue();
+            }
+        }
+
+        pub fn test(&mut self, ids: &[usize], delays: &[usize], expected_outputs: &[Report]) {
+            let mut switches = [false; N];
+
+            assert!(!ids.is_empty());
+            assert!(delays.len() == ids.len());
+            for id in ids {
+                assert!(*id < N);
+            }
+
+            self.reset();
+            for (id, delay) in ids.iter().zip(delays[0..ids.len()].iter()) {
+                switches[*id] ^= true;
+                for _ in 0..*delay {
+                    self.keymap.tick(&switches)
+                }
+                while self.c.ready() {
+                    self.c.dequeue();
+                }
+            }
+            self.keymap.tick(&switches);
+            for expected_output in expected_outputs {
+                assert_eq!(self.c.dequeue().unwrap(), *expected_output);
+            }
         }
     }
 
     #[test]
-    fn test_keys() {
-        let (p1, mut c1) = unsafe { Q.split() };
-        let mut keymap: Keymap<2, 6, 5> = keymap!([[
-            kc!(A), ht!(50, F, J);
+    fn test() {
+        let (p, c) = unsafe { Q.split() };
+        let keymap: Keymap<2, 6, 5> = keymap!([[
+            kc!(A), ht!(50, kb!(F), kb!(J));
             kc!(A), prlc!(1);
             kc!(A), prld!(1);
         ],
@@ -228,194 +260,37 @@ mod test {
             kc!(B), kc!(B);
             kc!(B), relu!(1);
             kc!(B), prld!(0);
-        ]], 5, &HANDLERS, p1);
+        ]], 5, &HANDLERS, p);
 
-        let mut keys = [false, false, false, false, false, false];
+        let mut tester = Tester::new(keymap, c);
 
-        for _ in 0..10 {
-            keymap.tick(&keys);
-        }
-        assert_eq!(c1.dequeue(), None);
-
-        // one key
-        keys[0] = true;
-        bounce(&mut keymap, &keys, &mut c1);
-        for _ in 0..10 {
-            keymap.tick(&keys);
-            assert_eq!(c1.dequeue(), Some(Report::Keyboard(Keyboard::A)));
-        }
-
-        // two keys
-        keys[1] = true;
-        bounce(&mut keymap, &keys, &mut c1);
-        for _ in 0..10 {
-            keymap.tick(&keys);
-            assert_eq!(c1.dequeue(), Some(Report::Keyboard(Keyboard::A)));
-            assert_eq!(c1.dequeue(), Some(Report::Keyboard(Keyboard::A)));
-        }
-
-        // clear
-        keys.fill(false);
-        bounce(&mut keymap, &keys, &mut c1);
-        for _ in 0..10 {
-            keymap.tick(&keys);
-            assert_eq!(c1.dequeue(), None);
-        }
-
-        // layer 1
-        keys[4] = true;
-        keymap.tick(&keys);
-        keys[0] = true;
-        bounce(&mut keymap, &keys, &mut c1);
-        for _ in 0..10 {
-            keymap.tick(&keys);
-            assert_eq!(c1.dequeue(), Some(Report::Keyboard(Keyboard::B)));
-        }
-
-        // layer 0
-        keys[4] = false;
-        keymap.tick(&keys);
-        bounce(&mut keymap, &keys, &mut c1);
-        for _ in 0..10 {
-            keymap.tick(&keys);
-            assert_eq!(c1.dequeue(), Some(Report::Keyboard(Keyboard::A)));
-        }
-
-        // layer 1
-        keys[5] = true;
-        keymap.tick(&keys);
-        bounce(&mut keymap, &keys, &mut c1);
-        keys[5] = false;
-        keymap.tick(&keys);
-        bounce(&mut keymap, &keys, &mut c1);
-        for _ in 0..10 {
-            keymap.tick(&keys);
-            assert_eq!(c1.dequeue(), Some(Report::Keyboard(Keyboard::B)));
-        }
-
-        // layer 0
-        keys[5] = true;
-        keymap.tick(&keys);
-        bounce(&mut keymap, &keys, &mut c1);
-        keys[5] = false;
-        keymap.tick(&keys);
-        bounce(&mut keymap, &keys, &mut c1);
-        for _ in 0..10 {
-            keymap.tick(&keys);
-            assert_eq!(c1.dequeue(), Some(Report::Keyboard(Keyboard::A)));
-        }
-
-        // layer 1
-        keys[4] = true;
-        keymap.tick(&keys);
-        bounce(&mut keymap, &keys, &mut c1);
-        for _ in 0..10 {
-            keymap.tick(&keys);
-            assert_eq!(c1.dequeue(), Some(Report::Keyboard(Keyboard::B)));
-        }
-
-        // layer 0
-        keys[5] = true;
-        keymap.tick(&keys);
-        bounce(&mut keymap, &keys, &mut c1);
-        for _ in 0..10 {
-            keymap.tick(&keys);
-            assert_eq!(c1.dequeue(), Some(Report::Keyboard(Keyboard::A)));
-        }
-
-        // layer 1
-        keys[5] = false;
-        keymap.tick(&keys);
-        bounce(&mut keymap, &keys, &mut c1);
-        keys[5] = true;
-        keymap.tick(&keys);
-        bounce(&mut keymap, &keys, &mut c1);
-        for _ in 0..10 {
-            keymap.tick(&keys);
-            assert_eq!(c1.dequeue(), Some(Report::Keyboard(Keyboard::B)));
-        }
-
-        // layer 1
-        keys[4] = true;
-        keymap.tick(&keys);
-        bounce(&mut keymap, &keys, &mut c1);
-        for _ in 0..10 {
-            keymap.tick(&keys);
-            assert_eq!(c1.dequeue(), Some(Report::Keyboard(Keyboard::B)));
-        }
-
-        // layer 1
-        keys[4] = false;
-        keymap.tick(&keys);
-        bounce(&mut keymap, &keys, &mut c1);
-        for _ in 0..10 {
-            keymap.tick(&keys);
-            assert_eq!(c1.dequeue(), Some(Report::Keyboard(Keyboard::B)));
-        }
-
-        // layer 0
-        keys[5] = false;
-        keymap.tick(&keys);
-        bounce(&mut keymap, &keys, &mut c1);
-        keys[5] = true;
-        keymap.tick(&keys);
-        bounce(&mut keymap, &keys, &mut c1);
-        for _ in 0..10 {
-            keymap.tick(&keys);
-            assert_eq!(c1.dequeue(), Some(Report::Keyboard(Keyboard::A)));
-        }
-
-        // clear
-        keys.fill(false);
-        keymap.tick(&keys);
-        bounce(&mut keymap, &keys, &mut c1);
-
-        // hold
-        keys[3] = true;
-        bounce(&mut keymap, &keys, &mut c1);
-        for _ in 0..51 {
-            keymap.tick(&keys);
-        }
-        assert_eq!(c1.dequeue(), Some(Report::Keyboard(Keyboard::F)));
-
-        // clear
-        keys.fill(false);
-        keymap.tick(&keys);
-        bounce(&mut keymap, &keys, &mut c1);
-
+        // 1 key
+        tester.test(&[0], &[5], &[r!(A)]);
+        // 2 keys
+        tester.test(&[0, 1], &[0, 5], &[r!(A), r!(A)]);
+        // current layer 0 -> 1
+        tester.test(&[4, 0], &[6, 5], &[r!(B)]);
+        // current layer 1 -> 0 -> 1 -> 0
+        tester.test(&[4, 4, 0], &[6, 6, 5], &[r!(A)]);
+        // default layer 0 -> 1
+        tester.test(&[5, 5, 0], &[6, 0, 5], &[r!(B)]);
+        // default layer 1 -> 0
+        tester.test(&[5, 5, 0], &[6, 6, 5], &[r!(A)]);
+        // current layer 0 -> 1
+        // default layer 1 -> 0
+        tester.test(&[4, 5, 0], &[6, 6, 5], &[r!(A)]);
+        // default layer 0 -> 1
+        // // current layer 1 -> 0
+        tester.test(&[5, 4, 0], &[6, 6, 5], &[r!(B)]);
+        // default layer 1 -> 0
+        tester.test(&[5, 0], &[6, 5], &[r!(A)]);
         // tap
-        keys[3] = true;
-        bounce(&mut keymap, &keys, &mut c1);
-        for _ in 0..44 {
-            keymap.tick(&keys);
-        }
-        keys[3] = false;
-        for _ in 0..6 {
-            keymap.tick(&keys);
-        }
-        assert_eq!(c1.dequeue(), Some(Report::Keyboard(Keyboard::J)));
-
-        // chording
-        keys[2] = true;
-        keymap.tick(&keys);
-        keys[0] = true;
-        for _ in 0..6 {
-            keymap.tick(&keys);
-        }
-        assert_eq!(c1.dequeue(), Some(Report::Keyboard(Keyboard::Q)));
-        keys[0] = false;
-        keys[2] = false;
-        bounce(&mut keymap, &keys, &mut c1);
-
-        // chording
-        keys[5] = true;
-        keymap.tick(&keys);
-        keys[2] = true;
-        for _ in 0..6 {
-            keymap.tick(&keys);
-        }
-
-        assert_eq!(c1.dequeue(), Some(Report::Keyboard(Keyboard::C)));
-        assert_eq!(c1.dequeue(), Some(Report::Keyboard(Keyboard::D)));
+        tester.test(&[3, 3], &[49, 5], &[r!(J)]);
+        // hold
+        tester.test(&[3], &[55], &[r!(F)]);
+        //chording
+        tester.test(&[0, 2], &[0, 5], &[r!(Q)]);
+        // combination
+        tester.test(&[4, 2], &[6, 5], &[r!(C), r!(D)]);
     }
 }

@@ -1,14 +1,20 @@
-use crate::action::{Act, KeyboardAction};
+use crate::action::{Act, Action};
 use crate::event::Event;
 
 pub struct HoldTap {
-    pub thold: usize,
-    pub hold: KeyboardAction,
-    pub tap: KeyboardAction,
+    thold: usize,
+    hold: Action,
+    tap: Action,
+}
+
+impl HoldTap {
+    pub const fn new(thold: usize, hold: Action, tap: Action) -> HoldTap {
+        HoldTap { thold, hold, tap }
+    }
 }
 
 impl Act for HoldTap {
-    fn act(&self, event: &Event) -> Option<&KeyboardAction> {
+    fn act(&self, event: &Event) -> Option<&Action> {
         match event {
             Event::Pressed(i) if *i == self.thold => Some(&self.hold),
             Event::Release(i) if *i < self.thold => Some(&self.tap),
@@ -19,22 +25,18 @@ impl Act for HoldTap {
 
 #[macro_export]
 macro_rules! ht {
-    ($thold:literal, $hold:tt, $tap: tt) => {
-        $crate::action::Action(&$crate::holdtap::HoldTap {
-            thold: $thold,
-            hold: $crate::kb!($hold),
-            tap: $crate::kb!($tap),
-        })
+    ($thold:literal, $hold:expr, $tap: expr) => {
+        $crate::holdtap::HoldTap::new($thold, $hold, $tap)
     };
 }
 
 #[cfg(test)]
 #[no_implicit_prelude]
 mod test {
-    use crate::ht;
+    use crate::{ht, kb};
 
     #[test]
     fn test_ht_macros() {
-        ht!(50, F, J);
+        ht!(50, kb!(F), kb!(J));
     }
 }

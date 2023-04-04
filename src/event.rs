@@ -6,15 +6,33 @@ pub enum Event {
     Released(usize),
 }
 
+impl Default for Event {
+    fn default() -> Self {
+        Event::Released(0)
+    }
+}
+
+impl Event {
+    pub fn new() -> Event {
+        Default::default()
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum State {
     Pressed(usize),
     Released(usize),
 }
 
+impl Default for State {
+    fn default() -> Self {
+        State::Released(0)
+    }
+}
+
 impl State {
     pub fn new() -> State {
-        State::Released(0)
+        Default::default()
     }
 
     pub fn press(&mut self) -> Event {
@@ -57,7 +75,7 @@ impl State {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 pub struct Debouncer<const DT: usize> {
     buffer: State,
     state: State,
@@ -65,10 +83,7 @@ pub struct Debouncer<const DT: usize> {
 
 impl<const DT: usize> Debouncer<DT> {
     pub fn new() -> Debouncer<DT> {
-        Debouncer {
-            buffer: State::new(),
-            state: State::new(),
-        }
+        Default::default()
     }
 
     pub fn press(&mut self) -> Event {
