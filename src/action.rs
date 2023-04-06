@@ -1,6 +1,8 @@
 use crate::event::Event;
 use crate::report::Report;
 
+pub mod holdtap;
+
 pub trait Act: Sync {
     fn act(&self, event: &Event) -> Option<&Action>;
 }

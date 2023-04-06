@@ -26,7 +26,7 @@ impl Act for HoldTap {
 #[macro_export]
 macro_rules! ht {
     ($thold:literal, $hold:expr, $tap: expr) => {
-        $crate::holdtap::HoldTap::new($thold, $hold, $tap)
+        $crate::action::holdtap::HoldTap::new($thold, $hold, $tap)
     };
 }
 

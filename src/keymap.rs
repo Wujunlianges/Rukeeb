@@ -1,45 +1,52 @@
 use heapless::spsc::Producer;
 
 use crate::action::Act;
-use crate::event::{Debouncer, Event};
+use crate::debouncer::Debouncer;
+use crate::event::Event;
 use crate::handler::Handle;
 use crate::performer::Performer;
 use crate::report::Report;
 
 pub struct Keymap<const L: usize, const N: usize, const DT: usize> {
-    layers: &'static [[&'static dyn Act; N]; L],
+    keys: &'static [[&'static dyn Act; N]; L],
     debouncers: [Debouncer<DT>; N],
     events: [Event; N],
+    layers: [usize; N],
     handlers: &'static [&'static dyn Handle],
     performer: Performer,
 }
 
 impl<const L: usize, const N: usize, const DT: usize> Keymap<L, N, DT> {
     pub fn new(
-        layers: &'static [[&'static dyn Act; N]; L],
+        keys: &'static [[&'static dyn Act; N]; L],
         handlers: &'static [&'static dyn Handle],
         reports: Producer<'static, Report, 128>,
     ) -> Keymap<L, N, DT> {
         Keymap {
-            layers,
+            keys,
             debouncers: [Debouncer::new(); N],
             events: [Event::new(); N],
+            layers: [0; N],
             handlers,
             performer: Performer::new(L, reports),
         }
     }
 
     pub fn tick(&mut self, switches: &[bool]) {
-        for ((switch, debouncer), event) in switches
+        switches
             .iter()
             .zip(self.debouncers.iter_mut())
             .zip(self.events.iter_mut())
-        {
-            *event = match switch {
-                true => debouncer.press(),
-                false => debouncer.release(),
-            };
-        }
+            .for_each(|((switch, debouncer), event)| *event = debouncer.trigger(*switch));
+
+        self.layers
+            .iter_mut()
+            .zip(self.events.iter())
+            .for_each(|(layer, event)| {
+                if let Event::Press(_) = event {
+                    *layer = self.performer.current_layer();
+                }
+            });
 
         for (i, handler) in self.handlers.iter().enumerate() {
             handler.handle(N + i, &mut self.events, &mut self.performer);
@@ -49,7 +56,7 @@ impl<const L: usize, const N: usize, const DT: usize> Keymap<L, N, DT> {
     }
 
     fn handle(&mut self) {
-        for (i, (key, event)) in self.layers[self.performer.current_layer()]
+        for (i, (key, event)) in self.keys[self.performer.current_layer()]
             .iter()
             .zip(self.events.iter())
             .enumerate()
@@ -93,7 +100,7 @@ macro_rules! layer {
 pub(crate) use layer;
 
 #[macro_export]
-macro_rules! layers {
+macro_rules! keys {
     ($([$($($x:expr),+ $(,)?);* $(;)?]),* $(,)?) => {
         [$($crate::keymap::layer!($($($x,)*;)*),)*]
     };
@@ -105,7 +112,7 @@ macro_rules! keymap {
         {
             const N_LAYERS: usize = $crate::keymap::count_layers!($([$($($x),*);*]),*);
             const N_KEYS: usize = $crate::keymap::count_keys!($([$($($x),*);*]),*);
-            const LAYERS: [[&'static dyn $crate::action::Act; N_KEYS] ;N_LAYERS] = $crate::layers!($([$($(&$x),*);*]),*);
+            const LAYERS: [[&'static dyn $crate::action::Act; N_KEYS] ;N_LAYERS] = $crate::keys!($([$($(&$x),*);*]),*);
             Keymap::<N_LAYERS, N_KEYS, $dt>::new(&LAYERS, &$handlers, $reports)
         }
     };
@@ -140,7 +147,9 @@ mod test_macros {
     use std::option::Option::{None, Some};
 
     use crate::action::Action;
-    use crate::handler::{Chord, Comb, Handle};
+    use crate::handler::chord::Chord;
+    use crate::handler::comb::Comb;
+    use crate::handler::Handle;
     use crate::keymap::Keymap;
     use crate::report::Report;
     use crate::*;
@@ -148,20 +157,20 @@ mod test_macros {
     static mut Q: Queue<Report, 128> = Queue::new();
 
     static CHORD1: Chord<2> = chrd!(0, 2, [Some(kb!(Q)), None]);
-    static COMB1: Comb<2> = comb!(2, [None, Some(&[kb!(C), kb!(D)])]);
+    static COMB1: Comb<2> = cmb!(2, [None, Some(&[kb!(C), kb!(D)])]);
     static HANDLERS: [&'static dyn Handle; 2] = handlers![CHORD1, COMB1];
 
     #[test]
     fn test_layer_macros() {
-        layers![[kc!(A)]];
-        layers![[kc!(A),]];
-        layers![[kc!(A);]];
-        layers![[kc!(A),;]];
+        keys![[kc!(A)]];
+        keys![[kc!(A),]];
+        keys![[kc!(A);]];
+        keys![[kc!(A),;]];
 
-        layers![[kc!(A),;kc!(A)]];
-        layers![[kc!(A),;kc!(A);]];
+        keys![[kc!(A),;kc!(A)]];
+        keys![[kc!(A),;kc!(A);]];
 
-        layers![[kc!(A),kc!(A);kc!(A),kc!(A),;]];
+        keys![[kc!(A),kc!(A);kc!(A),kc!(A),;]];
 
         let p = unsafe { Q.split().0 };
         keymap!([[
@@ -183,6 +192,8 @@ mod test {
     use heapless::spsc::{Consumer, Queue};
 
     use crate::action::*;
+    use crate::handler::chord::Chord;
+    use crate::handler::comb::Comb;
     use crate::handler::*;
     use crate::keymap::Keymap;
     use crate::report::*;
@@ -191,7 +202,7 @@ mod test {
     static mut Q: Queue<Report, 128> = Queue::new();
 
     static CHORD1: Chord<2> = chrd!(0, 2, [Some(kb!(Q)), None]);
-    static COMB1: Comb<2> = comb!(2, [None, Some(&[kb!(C), kb!(D)])]);
+    static COMB1: Comb<2> = cmb!(2, [None, Some(&[kb!(C), kb!(D)])]);
     static HANDLERS: [&'static dyn Handle; 2] = handlers![CHORD1, COMB1];
 
     macro_rules! r {
