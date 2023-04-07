@@ -1,3 +1,4 @@
+use core::cmp::{max, min};
 use core::sync::atomic::{AtomicBool, Ordering};
 
 use crate::action::Action;
@@ -30,30 +31,21 @@ impl<const N: usize, const L: usize> Handle<N, L> for Chord<L> {
         let State(enabled1, layer1, event1) = states[id1];
 
         if enabled0 && enabled1 && (layer0 == layer1) {
-            let layer = layer0;
-            if let Some(action) = &self.actions[layer] {
+            if let Some(action) = &self.actions[layer0] {
                 match self.triggered.load(Ordering::Relaxed) {
-                    false => match (event0, event1) {
-                        (Event::Press(_), Event::Pressed(_))
-                        | (Event::Pressed(_), Event::Press(_))
-                        | (Event::Press(_), Event::Press(_)) => {
+                    false => {
+                        if let Event::Press(_) = max(&event0, &event1) {
                             self.triggered.store(true, Ordering::Relaxed);
                             states[id0].disable();
                             states[id1].disable();
                             performer.perform(action);
                         }
-                        _ => {}
-                    },
+                    }
                     true => {
                         states[id0].disable();
                         states[id1].disable();
-                        match (event0, event1) {
-                            (Event::Release(_), Event::Released(_))
-                            | (Event::Released(_), Event::Release(_))
-                            | (Event::Release(_), Event::Release(_)) => {
-                                self.triggered.store(false, Ordering::Relaxed);
-                            }
-                            _ => {}
+                        if let Event::Release(_) = min(&event0, &event1) {
+                            self.triggered.store(false, Ordering::Relaxed);
                         }
                     }
                 }

@@ -1,8 +1,8 @@
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Event {
+    Pressed(usize),
     Press(usize),
     Release(usize),
-    Pressed(usize),
     Released(usize),
 }
 
