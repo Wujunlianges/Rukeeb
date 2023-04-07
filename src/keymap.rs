@@ -6,12 +6,11 @@ use crate::event::Event;
 use crate::handler::{Handle, KeyHandler};
 use crate::performer::Performer;
 use crate::report::Report;
+use crate::state::State;
 
 pub struct Keymap<const N: usize, const L: usize, const DT: usize> {
     debouncers: [Debouncer<DT>; N],
-    events: [Event; N],
-    layers: [usize; N],
-    enabled: [bool; N],
+    states: [State; N],
     handlers: &'static [&'static dyn Handle<N, L>],
     key_handler: KeyHandler<N, L>,
     performer: Performer<L>,
@@ -25,9 +24,7 @@ impl<const N: usize, const L: usize, const DT: usize> Keymap<N, L, DT> {
     ) -> Keymap<N, L, DT> {
         Keymap {
             debouncers: [Debouncer::new(); N],
-            events: [Event::new(); N],
-            layers: [0; N],
-            enabled: [false; N],
+            states: [State::new(); N],
             handlers,
             key_handler: KeyHandler::new(keys),
             performer: Performer::new(reports),
@@ -38,35 +35,17 @@ impl<const N: usize, const L: usize, const DT: usize> Keymap<N, L, DT> {
         switches
             .iter()
             .zip(self.debouncers.iter_mut())
-            .zip(self.events.iter_mut())
-            .for_each(|((switch, debouncer), event)| *event = debouncer.trigger(*switch));
-
-        self.layers
-            .iter_mut()
-            .zip(self.events.iter())
-            .for_each(|(layer, event)| {
-                if let Event::Press(_) = event {
-                    *layer = self.performer.current_layer();
-                }
+            .zip(self.states.iter_mut())
+            .for_each(|((switch, debouncer), state)| {
+                state.update(debouncer.trigger(*switch), self.performer.current_layer())
             });
 
-        self.enabled.fill(true);
+        self.handlers
+            .iter()
+            .for_each(|handler| handler.handle(&mut self.states, &mut self.performer));
 
-        self.handlers.iter().for_each(|handler| {
-            handler.handle(
-                &self.layers,
-                &self.events,
-                &mut self.enabled,
-                &mut self.performer,
-            )
-        });
-
-        self.key_handler.handle(
-            &self.layers,
-            &self.events,
-            &mut self.enabled,
-            &mut self.performer,
-        );
+        self.key_handler
+            .handle(&mut self.states, &mut self.performer);
     }
 }
 
@@ -137,9 +116,9 @@ mod test {
         }
 
         fn reset(&mut self) {
-            for _ in 0..(DT + 1) {
+            (0..(DT + 1)).into_iter().for_each(|_| {
                 self.keymap.tick(&[false; N]);
-            }
+            });
             while self.c.ready() {
                 self.c.dequeue();
             }
@@ -150,22 +129,23 @@ mod test {
 
             assert!(!ids.is_empty());
             assert!(delays.len() == ids.len());
-            for id in ids {
+            ids.iter().for_each(|id| {
                 assert!(*id < N);
-            }
+            });
 
             self.reset();
-            for (id, delay) in ids.iter().zip(delays[0..ids.len()].iter()) {
+            ids.iter().zip(delays.iter()).for_each(|(id, delay)| {
                 switches[*id] ^= true;
-                for _ in 0..*delay {
-                    self.keymap.tick(&switches)
-                }
+                (0..*delay).for_each(|_| {
+                    self.keymap.tick(&switches);
+                });
                 while self.c.ready() {
                     self.c.dequeue();
                 }
-            }
+            });
+
             self.keymap.tick(&switches);
-            for expected_output in expected_outputs {
+            expected_outputs.iter().for_each(|expected_output| {
                 assert_eq!(
                     self.c.dequeue().unwrap(),
                     *expected_output,
@@ -174,7 +154,7 @@ mod test {
                     delays,
                     expected_outputs
                 );
-            }
+            });
         }
     }
 

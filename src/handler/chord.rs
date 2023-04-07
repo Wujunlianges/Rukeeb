@@ -4,6 +4,7 @@ use crate::action::Action;
 use crate::event::Event;
 use crate::handler::Handle;
 use crate::performer::Performer;
+use crate::state::State;
 
 pub struct Chord<const L: usize> {
     triggered: AtomicBool,
@@ -22,34 +23,31 @@ impl<const L: usize> Chord<L> {
 }
 
 impl<const N: usize, const L: usize> Handle<N, L> for Chord<L> {
-    fn handle(
-        &self,
-        layers: &[usize; N],
-        events: &[Event; N],
-        enabled: &mut [bool; N],
-        performer: &mut Performer<L>,
-    ) {
+    fn handle(&self, states: &mut [State; N], performer: &mut Performer<L>) {
         let (id0, id1) = self.ids;
 
-        if enabled[id0] && enabled[id1] && (layers[id0] == layers[id1]) {
-            let layer = layers[id0];
+        let State(enabled0, layer0, event0) = states[id0];
+        let State(enabled1, layer1, event1) = states[id1];
+
+        if enabled0 && enabled1 && (layer0 == layer1) {
+            let layer = layer0;
             if let Some(action) = &self.actions[layer] {
                 match self.triggered.load(Ordering::Relaxed) {
-                    false => match (events[id0], events[id1]) {
+                    false => match (event0, event1) {
                         (Event::Press(_), Event::Pressed(_))
                         | (Event::Pressed(_), Event::Press(_))
                         | (Event::Press(_), Event::Press(_)) => {
                             self.triggered.store(true, Ordering::Relaxed);
-                            enabled[id0] = false;
-                            enabled[id1] = false;
+                            states[id0].disable();
+                            states[id1].disable();
                             performer.perform(action);
                         }
                         _ => {}
                     },
                     true => {
-                        enabled[id0] = false;
-                        enabled[id1] = false;
-                        match (events[id0], events[id1]) {
+                        states[id0].disable();
+                        states[id1].disable();
+                        match (event0, event1) {
                             (Event::Release(_), Event::Released(_))
                             | (Event::Released(_), Event::Release(_))
                             | (Event::Release(_), Event::Release(_)) => {

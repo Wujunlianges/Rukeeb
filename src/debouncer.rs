@@ -1,30 +1,30 @@
 use crate::event::Event;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum State {
+pub enum Counter {
     Pressed(usize),
     Released(usize),
 }
 
-impl Default for State {
+impl Default for Counter {
     fn default() -> Self {
-        State::Released(0)
+        Counter::Released(0)
     }
 }
 
-impl State {
-    pub fn new() -> State {
+impl Counter {
+    pub fn new() -> Counter {
         Default::default()
     }
 
     pub fn press(&mut self) -> Event {
         match *self {
-            State::Pressed(i) => {
-                *self = State::Pressed(i.saturating_add(1));
+            Counter::Pressed(i) => {
+                *self = Counter::Pressed(i.saturating_add(1));
                 Event::Pressed(i.saturating_add(1))
             }
-            State::Released(i) => {
-                *self = State::Pressed(0);
+            Counter::Released(i) => {
+                *self = Counter::Pressed(0);
                 Event::Press(i)
             }
         }
@@ -32,12 +32,12 @@ impl State {
 
     pub fn release(&mut self) -> Event {
         match *self {
-            State::Pressed(i) => {
-                *self = State::Released(0);
+            Counter::Pressed(i) => {
+                *self = Counter::Released(0);
                 Event::Release(i)
             }
-            State::Released(i) => {
-                *self = State::Released(i.saturating_add(1));
+            Counter::Released(i) => {
+                *self = Counter::Released(i.saturating_add(1));
                 Event::Released(i.saturating_add(1))
             }
         }
@@ -45,12 +45,12 @@ impl State {
 
     pub fn go_on(&mut self) -> Event {
         match *self {
-            State::Pressed(i) => {
-                *self = State::Pressed(i.saturating_add(1));
+            Counter::Pressed(i) => {
+                *self = Counter::Pressed(i.saturating_add(1));
                 Event::Pressed(i.saturating_add(1))
             }
-            State::Released(i) => {
-                *self = State::Released(i.saturating_add(1));
+            Counter::Released(i) => {
+                *self = Counter::Released(i.saturating_add(1));
                 Event::Released(i.saturating_add(1))
             }
         }
@@ -59,8 +59,8 @@ impl State {
 
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 pub struct Debouncer<const DT: usize> {
-    buffer: State,
-    state: State,
+    buffer: Counter,
+    counter: Counter,
 }
 
 impl<const DT: usize> Debouncer<DT> {
@@ -71,16 +71,16 @@ impl<const DT: usize> Debouncer<DT> {
     pub fn press(&mut self) -> Event {
         self.buffer.press();
         match self.buffer {
-            State::Pressed(i) if i >= DT => self.state.press(),
-            _ => self.state.go_on(),
+            Counter::Pressed(i) if i >= DT => self.counter.press(),
+            _ => self.counter.go_on(),
         }
     }
 
     pub fn release(&mut self) -> Event {
         self.buffer.release();
         match self.buffer {
-            State::Released(i) if i >= DT => self.state.release(),
-            _ => self.state.go_on(),
+            Counter::Released(i) if i >= DT => self.counter.release(),
+            _ => self.counter.go_on(),
         }
     }
 
@@ -101,19 +101,19 @@ mod test {
         let mut debouncer = Debouncer::<5>::new();
         let mut event = Event::Released(0);
 
-        for _ in 0..10 {
+        (0..10).into_iter().for_each(|_| {
             event = debouncer.release();
-        }
+        });
         assert_eq!(event, Event::Released(10));
 
-        for _ in 0..11 {
+        (0..11).into_iter().for_each(|_| {
             event = debouncer.press();
-        }
+        });
         assert_eq!(event, Event::Pressed(5));
 
-        for _ in 0..11 {
+        (0..11).into_iter().for_each(|_| {
             event = debouncer.release();
-        }
+        });
         assert_eq!(event, Event::Released(5));
     }
 
@@ -122,14 +122,14 @@ mod test {
         let mut debouncer = Debouncer::<5>::new();
         let mut event = Event::Released(0);
 
-        for _ in 0..10 {
+        (0..10).into_iter().for_each(|_| {
             debouncer.release();
             debouncer.press();
             debouncer.press();
             debouncer.press();
             debouncer.press();
             event = debouncer.press();
-        }
+        });
 
         assert_eq!(event, Event::Released(60));
     }
@@ -139,9 +139,9 @@ mod test {
         let mut debouncer = Debouncer::<0>::new();
         let mut event = Event::Released(1);
 
-        for _ in 0..10 {
+        (0..10).into_iter().for_each(|_| {
             event = debouncer.press();
-        }
+        });
 
         assert_eq!(event, Event::Pressed(9));
     }
