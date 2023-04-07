@@ -1,4 +1,4 @@
-use crate::action::{Act, Action};
+use crate::action::Action;
 use crate::event::Event;
 use crate::handler::Handle;
 use crate::performer::Performer;

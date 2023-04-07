@@ -70,13 +70,31 @@ impl<const N: usize, const L: usize, const DT: usize> Keymap<N, L, DT> {
     }
 }
 
+// From https://veykril.github.io/tlborm/decl-macros/building-blocks/counting.html#bit-twiddling
+macro_rules! count_tts {
+    () => { 0 };
+    ($odd:tt $($a:tt $b:tt)*) => { ($crate::keymap::count_tts!($($a)*) << 1) | 1 };
+    ($($a:tt $even:tt)*) => { $crate::keymap::count_tts!($($a)*) << 1 };
+}
+pub(crate) use count_tts;
+
+macro_rules! count_layers {
+    ($([$($($x:expr),*);*]),*) => {$crate::keymap::count_tts!($([$($($x),*);*])*)};
+}
+pub(crate) use count_layers;
+
+macro_rules! count_keys {
+    ([$($($x0:expr),*);*], $([$($($x:expr),*);*]),*) => {$crate::keymap::count_tts!($($($x0)*)*)};
+}
+pub(crate) use count_keys;
+
 #[macro_export]
 macro_rules! keymap {
     ([$([$($($x:expr),+ $(,)?);* $(;)?]),* $(,)?], $dt:literal, &$handlers:ident, $reports:ident) => {
         {
-            const N_LAYERS: usize = $crate::handler::count_layers!($([$($($x),*);*]),*);
-            const N_KEYS: usize = $crate::handler::count_keys!($([$($($x),*);*]),*);
-            const KEYS: [[&'static dyn $crate::action::Act; N_LAYERS] ;N_KEYS] = $crate::handler::keys!($([$($(&$x),*);*]),*);
+            const N_LAYERS: usize = $crate::keymap::count_layers!($([$($($x),*);*]),*);
+            const N_KEYS: usize = $crate::keymap::count_keys!($([$($($x),*);*]),*);
+            const KEYS: [[&'static dyn $crate::action::Act; N_LAYERS] ;N_KEYS] = $crate::keys!($([$($($x),*);*]),*);
             $crate::keymap::Keymap::<N_KEYS, N_LAYERS, $dt>::new(&KEYS, &$handlers, $reports)
         }
     };
@@ -84,11 +102,8 @@ macro_rules! keymap {
 
 #[cfg(test)]
 mod test {
-    use core::sync::atomic::AtomicBool;
-
     use heapless::spsc::{Consumer, Queue};
 
-    use crate::action::*;
     use crate::handler::chord::Chord;
     use crate::handler::comb::Comb;
     use crate::handler::*;
@@ -168,13 +183,13 @@ mod test {
         let (p, c) = unsafe { Q.split() };
         let keymap: Keymap<6, 2, 5> = keymap!([[
             kc!(A), ht!(50, kb!(F), kb!(J));
-            kc!(A), prlc!(1);
-            kc!(A), pld!(1);
+            kc!(A), oocl!(1);
+            kc!(A), tpdl!(1);
         ],
         [
             kc!(B), kc!(B);
             kc!(B), kc!(B);
-            kc!(B), pld!(0);
+            kc!(B), tpdl!(0);
         ]], 5, &HANDLERS, p);
 
         let mut tester = Tester::new(keymap, c);
@@ -200,7 +215,7 @@ mod test {
         tester.test(&[3, 3], &[49, 5], &[r!(J)]);
         // hold
         tester.test(&[3], &[55], &[r!(F)]);
-        //chording
+        // chording
         tester.test(&[0, 2], &[0, 5], &[r!(Q)]);
         // combination
         tester.test(&[4, 2], &[6, 5], &[r!(C), r!(D)]);

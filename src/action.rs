@@ -17,52 +17,25 @@ pub enum Layer {
     Current(usize),
 }
 
-pub struct PressAction(Action);
-pub struct PressedAction(Action);
-pub struct ReleaseAction(Action);
-pub struct ReleasedAction(Action);
-pub struct PressReleaseAction(Action);
+pub struct Hold(Action);
+pub struct Tap(Action);
+pub struct OnOff(Action);
 
-impl PressAction {
-    pub const fn new(action: Action) -> PressAction {
-        PressAction(action)
-    }
+macro_rules! implement_new {
+    ($($x:ident),* $(,)?) => {
+        $(
+            impl $x {
+                pub const fn new(action: Action) -> $x {
+                    $x(action)
+                }
+            }
+        )*
+    };
 }
 
-impl PressedAction {
-    pub const fn new(action: Action) -> PressedAction {
-        PressedAction(action)
-    }
-}
+implement_new!(Hold, Tap, OnOff);
 
-impl ReleaseAction {
-    pub const fn new(action: Action) -> ReleaseAction {
-        ReleaseAction(action)
-    }
-}
-
-impl ReleasedAction {
-    pub const fn new(action: Action) -> ReleasedAction {
-        ReleasedAction(action)
-    }
-}
-
-impl PressReleaseAction {
-    pub const fn new(action: Action) -> PressReleaseAction {
-        PressReleaseAction(action)
-    }
-}
-
-impl Act for PressAction {
-    fn act(&self, event: &Event) -> Option<&Action> {
-        match event {
-            Event::Press(_) => Some(&self.0),
-            _ => None,
-        }
-    }
-}
-
-impl Act for PressedAction {
+impl Act for Hold {
     fn act(&self, event: &Event) -> Option<&Action> {
         match event {
             Event::Press(_) | Event::Pressed(_) => Some(&self.0),
@@ -71,25 +44,16 @@ impl Act for PressedAction {
     }
 }
 
-impl Act for ReleaseAction {
+impl Act for Tap {
     fn act(&self, event: &Event) -> Option<&Action> {
         match event {
-            Event::Release(_) => Some(&self.0),
+            Event::Press(_) => Some(&self.0),
             _ => None,
         }
     }
 }
 
-impl Act for ReleasedAction {
-    fn act(&self, event: &Event) -> Option<&Action> {
-        match event {
-            Event::Release(_) | Event::Released(_) => Some(&self.0),
-            _ => None,
-        }
-    }
-}
-
-impl Act for PressReleaseAction {
+impl Act for OnOff {
     fn act(&self, event: &Event) -> Option<&Action> {
         match event {
             Event::Press(_) | Event::Release(_) => Some(&self.0),
@@ -128,17 +92,17 @@ macro_rules! dk {
     };
 }
 
-// Layer Default
+// Default Layer
 #[macro_export]
-macro_rules! ld {
+macro_rules! dl {
     ($x: tt) => {{
         $crate::action::Action::Layer($crate::action::Layer::Default($x))
     }};
 }
 
-// Layer Current
+// Current Layer
 #[macro_export]
-macro_rules! lc {
+macro_rules! cl {
     ($x: tt) => {{
         $crate::action::Action::Layer($crate::action::Layer::Current($x))
     }};
@@ -146,59 +110,59 @@ macro_rules! lc {
 
 // Action Macros
 
-// Pressed Keyboard Report
+// Hold Keyboard Report
 #[macro_export]
-macro_rules! pdkb {
+macro_rules! hdkb {
     ($x:tt) => {
-        $crate::action::PressedAction::new($crate::kb!($x))
+        $crate::action::Hold::new($crate::kb!($x))
     };
 }
 
-// Press Keyboard Report
+// Tap Customer Report
 #[macro_export]
-macro_rules! pcu {
+macro_rules! tpcu {
     ($x:tt) => {
-        $crate::action::PressAction::new($crate::cu!($x))
+        $crate::action::Tap::new($crate::cu!($x))
     };
 }
 
-// Pressed Customer Report
+// Hold Customer Report
 #[macro_export]
-macro_rules! pdcu {
+macro_rules! hdcu {
     ($x:tt) => {
-        $crate::action::PressedAction::new($crate::cu!($x))
+        $crate::action::Hold::new($crate::cu!($x))
     };
 }
 
-// Press Desktop Report
+// Tap Desktop Report
 #[macro_export]
-macro_rules! pdk {
+macro_rules! tpdk {
     ($x:tt) => {
-        $crate::action::PressAction::new($crate::dk!($x))
+        $crate::action::Tap::new($crate::dk!($x))
     };
 }
 
-// Pressed Desktop Report
+// Hold Desktop Report
 #[macro_export]
-macro_rules! pddk {
+macro_rules! hddk {
     ($x:tt) => {
-        $crate::action::PressedAction::new($crate::dk!($x))
+        $crate::action::Hold::new($crate::dk!($x))
     };
 }
 
-// Press Layer Default
+// Tap Default Layer
 #[macro_export]
-macro_rules! pld {
+macro_rules! tpdl {
     ($x:tt) => {
-        $crate::action::PressAction::new($crate::ld!($x))
+        $crate::action::Tap::new($crate::dl!($x))
     };
 }
 
-// PressRelease Layer Current
+// OnOff Current Layer
 #[macro_export]
-macro_rules! prlc {
+macro_rules! oocl {
     ($x:tt) => {
-        $crate::action::PressReleaseAction::new($crate::lc!($x))
+        $crate::action::OnOff::new($crate::cl!($x))
     };
 }
 
@@ -208,299 +172,166 @@ macro_rules! prlc {
 #[rustfmt::skip]
 macro_rules! kc {
     // Keyboard
-    (NO)   => {$crate::pdkb!(NoEventIndicated)};
-    (A)    => {$crate::pdkb!(A)};
-    (B)    => {$crate::pdkb!(B)};
-    (C)    => {$crate::pdkb!(C)};
-    (D)    => {$crate::pdkb!(D)};
-    (E)    => {$crate::pdkb!(E)};
-    (F)    => {$crate::pdkb!(F)};
-    (G)    => {$crate::pdkb!(G)};
-    (H)    => {$crate::pdkb!(H)};
-    (I)    => {$crate::pdkb!(I)};
-    (J)    => {$crate::pdkb!(J)};
-    (K)    => {$crate::pdkb!(K)};
-    (L)    => {$crate::pdkb!(L)};
-    (M)    => {$crate::pdkb!(M)};
-    (N)    => {$crate::pdkb!(N)};
-    (O)    => {$crate::pdkb!(O)};
-    (P)    => {$crate::pdkb!(P)};
-    (Q)    => {$crate::pdkb!(Q)};
-    (R)    => {$crate::pdkb!(R)};
-    (S)    => {$crate::pdkb!(S)};
-    (T)    => {$crate::pdkb!(T)};
-    (U)    => {$crate::pdkb!(U)};
-    (V)    => {$crate::pdkb!(V)};
-    (W)    => {$crate::pdkb!(W)};
-    (X)    => {$crate::pdkb!(X)};
-    (Y)    => {$crate::pdkb!(Y)};
-    (Z)    => {$crate::pdkb!(Z)};
-    (1)    => {$crate::pdkb!(Keyboard1)};
-    (2)    => {$crate::pdkb!(Keyboard2)};
-    (3)    => {$crate::pdkb!(Keyboard3)};
-    (4)    => {$crate::pdkb!(Keyboard4)};
-    (5)    => {$crate::pdkb!(Keyboard5)};
-    (6)    => {$crate::pdkb!(Keyboard6)};
-    (7)    => {$crate::pdkb!(Keyboard7)};
-    (8)    => {$crate::pdkb!(Keyboard8)};
-    (9)    => {$crate::pdkb!(Keyboard9)};
-    (0)    => {$crate::pdkb!(Keyboard0)};
-    (ENT)  => {$crate::pdkb!(ReturnEnter)};
-    (F1)   => {$crate::pdkb!(F1)};
-    (F2)   => {$crate::pdkb!(F2)};
-    (F3)   => {$crate::pdkb!(F3)};
-    (F4)   => {$crate::pdkb!(F4)};
-    (F5)   => {$crate::pdkb!(F5)};
-    (F6)   => {$crate::pdkb!(F6)};
-    (F7)   => {$crate::pdkb!(F7)};
-    (F8)   => {$crate::pdkb!(F8)};
-    (F9)   => {$crate::pdkb!(F9)};
-    (F10)  => {$crate::pdkb!(F10)};
-    (F11)  => {$crate::pdkb!(F11)};
-    (F12)  => {$crate::pdkb!(F12)};
-    (ENT)  => {$crate::pdkb!(ReturnEnter)};
-    (ESC)  => {$crate::pdkb!(Escape)};
-    (BSPC) => {$crate::pdkb!(DeleteBackspace)};
-    (TAB)  => {$crate::pdkb!(Tab)};
-    (SPC)  => {$crate::pdkb!(Space)};
-    (MINS) => {$crate::pdkb!(Minus)};
-    (EQL)  => {$crate::pdkb!(Equal)};
-    (LBRC) => {$crate::pdkb!(LeftBrace)};
-    (RBRC) => {$crate::pdkb!(RightBrace)};
-    (BSLS) => {$crate::pdkb!(Backslash)};
-    (NUHS) => {$crate::pdkb!(NonUSHash)};
-    (SCLN) => {$crate::pdkb!(Semicolon)};
-    (QUOT) => {$crate::pdkb!(Apostrophe)};
-    (GRV)  => {$crate::pdkb!(Grave)};
-    (COMM) => {$crate::pdkb!(Comma)};
-    (DOT)  => {$crate::pdkb!(Dot)};
-    (SLSH) => {$crate::pdkb!(ForwardSlash)};
-    (CAPS) => {$crate::pdkb!(CapsLock)};
-    (PSCR) => {$crate::pdkb!(PrintScreen)};
-    (SCRL) => {$crate::pdkb!(ScrollLock)};
-    (PAUS) => {$crate::pdkb!(Pause)};
-    (INS)  => {$crate::pdkb!(Insert)};
-    (HOME) => {$crate::pdkb!(Home)};
-    (PGUP) => {$crate::pdkb!(PageUp)};
-    (DEL)  => {$crate::pdkb!(DeleteForward)};
-    (END)  => {$crate::pdkb!(End)};
-    (PGDN) => {$crate::pdkb!(PageDown)};
-    (RGHT) => {$crate::pdkb!(RightArrow)};
-    (LEFT) => {$crate::pdkb!(LeftArrow)};
-    (DOWN) => {$crate::pdkb!(DownArrow)};
-    (UP)   => {$crate::pdkb!(UpArrow)};
-    (NUM)  => {$crate::pdkb!(KeypadNumLockAndClear)};
-    (PSLS) => {$crate::pdkb!(KeypadDivide)};
-    (PAST) => {$crate::pdkb!(KeypadMultiply)};
-    (PMNS) => {$crate::pdkb!(KeypadSubtract)};
-    (PPLS) => {$crate::pdkb!(KeypadAdd)};
-    (PENT) => {$crate::pdkb!(KeypadEnter)};
-    (P1)   => {$crate::pdkb!(Keypad1)};
-    (P2)   => {$crate::pdkb!(Keypad2)};
-    (P3)   => {$crate::pdkb!(Keypad3)};
-    (P4)   => {$crate::pdkb!(Keypad4)};
-    (P5)   => {$crate::pdkb!(Keypad5)};
-    (P6)   => {$crate::pdkb!(Keypad6)};
-    (P7)   => {$crate::pdkb!(Keypad7)};
-    (P8)   => {$crate::pdkb!(Keypad8)};
-    (P9)   => {$crate::pdkb!(Keypad9)};
-    (P0)   => {$crate::pdkb!(Keypad0)};
-    (PDOT) => {$crate::pdkb!(KeypadDot)};
-    (NUBS) => {$crate::pdkb!(NonUSBackslash)};
-    (APP)  => {$crate::pdkb!(Application)};
-    (PWOR) => {$crate::pdkb!(Power)};
-    (PEQL) => {$crate::pdkb!(KeypadEqual)};
-    (F13)  => {$crate::pdkb!(F13)};
-    (F14)  => {$crate::pdkb!(F14)};
-    (F15)  => {$crate::pdkb!(F15)};
-    (F16)  => {$crate::pdkb!(F16)};
-    (F17)  => {$crate::pdkb!(F17)};
-    (F18)  => {$crate::pdkb!(F18)};
-    (F19)  => {$crate::pdkb!(F19)};
-    (F20)  => {$crate::pdkb!(F20)};
-    (F21)  => {$crate::pdkb!(F21)};
-    (F22)  => {$crate::pdkb!(F22)};
-    (F23)  => {$crate::pdkb!(F23)};
-    (F24)  => {$crate::pdkb!(F24)};
+    (NO)   => {$crate::hdkb!(NoEventIndicated)};
+    (A)    => {$crate::hdkb!(A)};
+    (B)    => {$crate::hdkb!(B)};
+    (C)    => {$crate::hdkb!(C)};
+    (D)    => {$crate::hdkb!(D)};
+    (E)    => {$crate::hdkb!(E)};
+    (F)    => {$crate::hdkb!(F)};
+    (G)    => {$crate::hdkb!(G)};
+    (H)    => {$crate::hdkb!(H)};
+    (I)    => {$crate::hdkb!(I)};
+    (J)    => {$crate::hdkb!(J)};
+    (K)    => {$crate::hdkb!(K)};
+    (L)    => {$crate::hdkb!(L)};
+    (M)    => {$crate::hdkb!(M)};
+    (N)    => {$crate::hdkb!(N)};
+    (O)    => {$crate::hdkb!(O)};
+    (P)    => {$crate::hdkb!(P)};
+    (Q)    => {$crate::hdkb!(Q)};
+    (R)    => {$crate::hdkb!(R)};
+    (S)    => {$crate::hdkb!(S)};
+    (T)    => {$crate::hdkb!(T)};
+    (U)    => {$crate::hdkb!(U)};
+    (V)    => {$crate::hdkb!(V)};
+    (W)    => {$crate::hdkb!(W)};
+    (X)    => {$crate::hdkb!(X)};
+    (Y)    => {$crate::hdkb!(Y)};
+    (Z)    => {$crate::hdkb!(Z)};
+    (1)    => {$crate::hdkb!(Keyboard1)};
+    (2)    => {$crate::hdkb!(Keyboard2)};
+    (3)    => {$crate::hdkb!(Keyboard3)};
+    (4)    => {$crate::hdkb!(Keyboard4)};
+    (5)    => {$crate::hdkb!(Keyboard5)};
+    (6)    => {$crate::hdkb!(Keyboard6)};
+    (7)    => {$crate::hdkb!(Keyboard7)};
+    (8)    => {$crate::hdkb!(Keyboard8)};
+    (9)    => {$crate::hdkb!(Keyboard9)};
+    (0)    => {$crate::hdkb!(Keyboard0)};
+    (ENT)  => {$crate::hdkb!(ReturnEnter)};
+    (F1)   => {$crate::hdkb!(F1)};
+    (F2)   => {$crate::hdkb!(F2)};
+    (F3)   => {$crate::hdkb!(F3)};
+    (F4)   => {$crate::hdkb!(F4)};
+    (F5)   => {$crate::hdkb!(F5)};
+    (F6)   => {$crate::hdkb!(F6)};
+    (F7)   => {$crate::hdkb!(F7)};
+    (F8)   => {$crate::hdkb!(F8)};
+    (F9)   => {$crate::hdkb!(F9)};
+    (F10)  => {$crate::hdkb!(F10)};
+    (F11)  => {$crate::hdkb!(F11)};
+    (F12)  => {$crate::hdkb!(F12)};
+    (ENT)  => {$crate::hdkb!(ReturnEnter)};
+    (ESC)  => {$crate::hdkb!(Escape)};
+    (BSPC) => {$crate::hdkb!(DeleteBackspace)};
+    (TAB)  => {$crate::hdkb!(Tab)};
+    (SPC)  => {$crate::hdkb!(Space)};
+    (MINS) => {$crate::hdkb!(Minus)};
+    (EQL)  => {$crate::hdkb!(Equal)};
+    (LBRC) => {$crate::hdkb!(LeftBrace)};
+    (RBRC) => {$crate::hdkb!(RightBrace)};
+    (BSLS) => {$crate::hdkb!(Backslash)};
+    (NUHS) => {$crate::hdkb!(NonUSHash)};
+    (SCLN) => {$crate::hdkb!(Semicolon)};
+    (QUOT) => {$crate::hdkb!(Apostrophe)};
+    (GRV)  => {$crate::hdkb!(Grave)};
+    (COMM) => {$crate::hdkb!(Comma)};
+    (DOT)  => {$crate::hdkb!(Dot)};
+    (SLSH) => {$crate::hdkb!(ForwardSlash)};
+    (CAPS) => {$crate::hdkb!(CapsLock)};
+    (PSCR) => {$crate::hdkb!(PrintScreen)};
+    (SCRL) => {$crate::hdkb!(ScrollLock)};
+    (PAUS) => {$crate::hdkb!(Pause)};
+    (INS)  => {$crate::hdkb!(Insert)};
+    (HOME) => {$crate::hdkb!(Home)};
+    (PGUP) => {$crate::hdkb!(PageUp)};
+    (DEL)  => {$crate::hdkb!(DeleteForward)};
+    (END)  => {$crate::hdkb!(End)};
+    (PGDN) => {$crate::hdkb!(PageDown)};
+    (RGHT) => {$crate::hdkb!(RightArrow)};
+    (LEFT) => {$crate::hdkb!(LeftArrow)};
+    (DOWN) => {$crate::hdkb!(DownArrow)};
+    (UP)   => {$crate::hdkb!(UpArrow)};
+    (NUM)  => {$crate::hdkb!(KeypadNumLockAndClear)};
+    (PSLS) => {$crate::hdkb!(KeypadDivide)};
+    (PAST) => {$crate::hdkb!(KeypadMultiply)};
+    (PMNS) => {$crate::hdkb!(KeypadSubtract)};
+    (PPLS) => {$crate::hdkb!(KeypadAdd)};
+    (PENT) => {$crate::hdkb!(KeypadEnter)};
+    (P1)   => {$crate::hdkb!(Keypad1)};
+    (P2)   => {$crate::hdkb!(Keypad2)};
+    (P3)   => {$crate::hdkb!(Keypad3)};
+    (P4)   => {$crate::hdkb!(Keypad4)};
+    (P5)   => {$crate::hdkb!(Keypad5)};
+    (P6)   => {$crate::hdkb!(Keypad6)};
+    (P7)   => {$crate::hdkb!(Keypad7)};
+    (P8)   => {$crate::hdkb!(Keypad8)};
+    (P9)   => {$crate::hdkb!(Keypad9)};
+    (P0)   => {$crate::hdkb!(Keypad0)};
+    (PDOT) => {$crate::hdkb!(KeypadDot)};
+    (NUBS) => {$crate::hdkb!(NonUSBackslash)};
+    (APP)  => {$crate::hdkb!(Application)};
+    (PWOR) => {$crate::hdkb!(Power)};
+    (PEQL) => {$crate::hdkb!(KeypadEqual)};
+    (F13)  => {$crate::hdkb!(F13)};
+    (F14)  => {$crate::hdkb!(F14)};
+    (F15)  => {$crate::hdkb!(F15)};
+    (F16)  => {$crate::hdkb!(F16)};
+    (F17)  => {$crate::hdkb!(F17)};
+    (F18)  => {$crate::hdkb!(F18)};
+    (F19)  => {$crate::hdkb!(F19)};
+    (F20)  => {$crate::hdkb!(F20)};
+    (F21)  => {$crate::hdkb!(F21)};
+    (F22)  => {$crate::hdkb!(F22)};
+    (F23)  => {$crate::hdkb!(F23)};
+    (F24)  => {$crate::hdkb!(F24)};
 
-    (LCTL) => {$crate::pdkb!(LeftControl)};
-    (LSFT) => {$crate::pdkb!(LeftShift)};
-    (LALT) => {$crate::pdkb!(LeftAlt)};
-    (LGUI) => {$crate::pdkb!(LeftGUI)};
-    (RCTL) => {$crate::pdkb!(RightControl)};
-    (RSFT) => {$crate::pdkb!(RightShift)};
-    (RALT) => {$crate::pdkb!(RightAlt)};
-    (RGUI) => {$crate::pdkb!(RightGUI)};
+    (LCTL) => {$crate::hdkb!(LeftControl)};
+    (LSFT) => {$crate::hdkb!(LeftShift)};
+    (LALT) => {$crate::hdkb!(LeftAlt)};
+    (LGUI) => {$crate::hdkb!(LeftGUI)};
+    (RCTL) => {$crate::hdkb!(RightControl)};
+    (RSFT) => {$crate::hdkb!(RightShift)};
+    (RALT) => {$crate::hdkb!(RightAlt)};
+    (RGUI) => {$crate::hdkb!(RightGUI)};
 
 
     // Desktop
-    (PWR)  => {$crate::pdk!(SystemPowerDown)};
-    (SLEP) => {$crate::pdk!(SystemSleep)};
-    (WAKE) => {$crate::pdk!(SystemWakeUp)};
+    (PWR)  => {$crate::tpdk!(SystemPowerDown)};
+    (SLEP) => {$crate::tpdk!(SystemSleep)};
+    (WAKE) => {$crate::tpdk!(SystemWakeUp)};
 
 
     // Customer
-    (MUTE) => {$crate::pcu!(Mute)};
-    (VOLU) => {$crate::pdcu!(VolumeIncrement)};
-    (VOLD) => {$crate::pdcu!(VolumeDecrement)};
-    (MNXT) => {$crate::pdcu!(TrackingIncrement)};
-    (MPRV) => {$crate::pdcu!(TrackingDecrement)};
-    (MSTP) => {$crate::pcu!(Stop)};
-    (MPLY) => {$crate::pcu!(PlayPause)};
+    (MUTE) => {$crate::tpcu!(Mute)};
+    (VOLU) => {$crate::hdcu!(VolumeIncrement)};
+    (VOLD) => {$crate::hdcu!(VolumeDecrement)};
+    (MNXT) => {$crate::hdcu!(TrackingIncrement)};
+    (MPRV) => {$crate::hdcu!(TrackingDecrement)};
+    (MSTP) => {$crate::tpcu!(Stop)};
+    (MPLY) => {$crate::tpcu!(PlayPause)};
 }
 
 #[cfg(test)]
 mod test {
-    use crate::*;
+    macro_rules! test_kc {
+        ($($x:tt),* $(,)?) => {
+            [$(&kc!($x),)*]
+        };
+    }
 
     #[test]
-    fn test_all_macros() {
-        kc!(A);
-
-        kb!(A);
-        cu!(VolumeIncrement);
-
-        pdkb!(A);
-
-        pcu!(VolumeIncrement);
-        pdcu!(VolumeIncrement);
-
-        ld!(0);
-        lc!(0);
-        prlc!(0);
-        pld!(0);
-
-        kc!(NO);
-        kc!(A);
-        kc!(B);
-        kc!(C);
-        kc!(D);
-        kc!(E);
-        kc!(F);
-        kc!(G);
-        kc!(H);
-        kc!(I);
-        kc!(J);
-        kc!(K);
-        kc!(L);
-        kc!(M);
-        kc!(N);
-        kc!(O);
-        kc!(P);
-        kc!(Q);
-        kc!(R);
-        kc!(S);
-        kc!(T);
-        kc!(U);
-        kc!(V);
-        kc!(W);
-        kc!(X);
-        kc!(Y);
-        kc!(Z);
-        kc!(1);
-        kc!(2);
-        kc!(3);
-        kc!(4);
-        kc!(5);
-        kc!(6);
-        kc!(7);
-        kc!(8);
-        kc!(9);
-        kc!(0);
-        kc!(ENT);
-        kc!(F1);
-        kc!(F2);
-        kc!(F3);
-        kc!(F4);
-        kc!(F5);
-        kc!(F6);
-        kc!(F7);
-        kc!(F8);
-        kc!(F9);
-        kc!(F10);
-        kc!(F11);
-        kc!(F12);
-        kc!(ENT);
-        kc!(ESC);
-        kc!(BSPC);
-        kc!(TAB);
-        kc!(SPC);
-        kc!(MINS);
-        kc!(EQL);
-        kc!(LBRC);
-        kc!(RBRC);
-        kc!(BSLS);
-        kc!(NUHS);
-        kc!(SCLN);
-        kc!(QUOT);
-        kc!(GRV);
-        kc!(COMM);
-        kc!(DOT);
-        kc!(SLSH);
-        kc!(CAPS);
-        kc!(PSCR);
-        kc!(SCRL);
-        kc!(PAUS);
-        kc!(INS);
-        kc!(HOME);
-        kc!(PGUP);
-        kc!(DEL);
-        kc!(END);
-        kc!(PGDN);
-        kc!(RGHT);
-        kc!(LEFT);
-        kc!(DOWN);
-        kc!(UP);
-        kc!(NUM);
-        kc!(PSLS);
-        kc!(PAST);
-        kc!(PMNS);
-        kc!(PPLS);
-        kc!(PENT);
-        kc!(P1);
-        kc!(P2);
-        kc!(P3);
-        kc!(P4);
-        kc!(P5);
-        kc!(P6);
-        kc!(P7);
-        kc!(P8);
-        kc!(P9);
-        kc!(P0);
-        kc!(PDOT);
-        kc!(NUBS);
-        kc!(APP);
-        kc!(PWOR);
-        kc!(PEQL);
-        kc!(F13);
-        kc!(F14);
-        kc!(F15);
-        kc!(F16);
-        kc!(F17);
-        kc!(F18);
-        kc!(F19);
-        kc!(F20);
-        kc!(F21);
-        kc!(F22);
-        kc!(F23);
-        kc!(F24);
-        kc!(LCTL);
-        kc!(LSFT);
-        kc!(LALT);
-        kc!(LGUI);
-        kc!(RCTL);
-        kc!(RSFT);
-        kc!(RALT);
-        kc!(RGUI);
-        kc!(PWR);
-        kc!(SLEP);
-        kc!(WAKE);
-        kc!(MUTE);
-        kc!(VOLU);
-        kc!(VOLD);
-        kc!(MNXT);
-        kc!(MPRV);
-        kc!(MSTP);
-        kc!(MPLY);
+    fn test_kc() {
+        let _actions: [&dyn crate::action::Act; 132] = test_kc![
+            NO, A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S, T, U, V, W, X, Y, Z, 1, 2,
+            3, 4, 5, 6, 7, 8, 9, 0, ENT, F1, F2, F3, F4, F5, F6, F7, F8, F9, F10, F11, F12, ENT,
+            ESC, BSPC, TAB, SPC, MINS, EQL, LBRC, RBRC, BSLS, NUHS, SCLN, QUOT, GRV, COMM, DOT,
+            SLSH, CAPS, PSCR, SCRL, PAUS, INS, HOME, PGUP, DEL, END, PGDN, RGHT, LEFT, DOWN, UP,
+            NUM, PSLS, PAST, PMNS, PPLS, PENT, P1, P2, P3, P4, P5, P6, P7, P8, P9, P0, PDOT, NUBS,
+            APP, PWOR, PEQL, F13, F14, F15, F16, F17, F18, F19, F20, F21, F22, F23, F24, LCTL,
+            LSFT, LALT, LGUI, RCTL, RSFT, RALT, RGUI, PWR, SLEP, WAKE, MUTE, VOLU, VOLD, MNXT,
+            MPRV, MSTP, MPLY,
+        ];
     }
 }

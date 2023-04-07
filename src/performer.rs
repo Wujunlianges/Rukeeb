@@ -1,6 +1,6 @@
 use heapless::spsc::Producer;
 
-use crate::action::{Act, Action, Layer};
+use crate::action::{Action, Layer};
 use crate::report::Report;
 
 pub struct Performer<const L: usize> {
