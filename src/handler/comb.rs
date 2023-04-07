@@ -14,16 +14,24 @@ impl<const L: usize> Comb<L> {
     }
 }
 
-impl<const L: usize> Handle for Comb<L> {
-    fn handle(&self, _: usize, events: &mut [Event], performer: &mut Performer) {
-        if let Some(actions) = self.actions[performer.current_layer()] {
-            if let Event::Press(_) = events[self.id] {
-                for action in actions {
-                    performer.perform(self.id, action);
+impl<const N: usize, const L: usize> Handle<N, L> for Comb<L> {
+    fn handle(
+        &self,
+        layers: &[usize; N],
+        events: &[Event; N],
+        enabled: &mut [bool; N],
+        performer: &mut Performer<L>,
+    ) {
+        if enabled[self.id] {
+            if let Some(actions) = self.actions[layers[self.id]] {
+                if let Event::Press(_) = events[self.id] {
+                    for action in actions {
+                        performer.perform(action);
+                    }
                 }
             }
+            enabled[self.id] = false;
         }
-        events[self.id] = Event::Released(0);
     }
 }
 

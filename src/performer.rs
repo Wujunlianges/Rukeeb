@@ -1,56 +1,50 @@
 use heapless::spsc::Producer;
 
-use crate::action::{Action, Layer};
+use crate::action::{Act, Action, Layer};
 use crate::report::Report;
 
-pub struct Performer {
-    n_layers: usize,
+pub struct Performer<const L: usize> {
     current_layer: usize,
     default_layer: usize,
-    id: usize,
+    modifier: usize,
     reports: Producer<'static, Report, 128>,
 }
 
-impl Performer {
-    pub fn new(n_layers: usize, reports: Producer<'static, Report, 128>) -> Performer {
+impl<const L: usize> Performer<L> {
+    pub fn new(reports: Producer<'static, Report, 128>) -> Performer<L> {
         Performer {
-            n_layers,
             current_layer: 0,
             default_layer: 0,
-            id: 0,
+            modifier: 0,
             reports,
         }
     }
 
-    pub fn perform(&mut self, id: usize, action: &Action) {
+    pub fn perform(&mut self, action: &Action) {
         match action {
             Action::Report(report) => {
                 self.reports.enqueue(*report).unwrap();
             }
-            Action::Layer(layer) => self.perform_layer(id, layer),
-        }
-    }
-
-    fn perform_layer(&mut self, id: usize, layer: &Layer) {
-        match layer {
-            Layer::Current(l) => {
-                if *l < self.n_layers {
-                    self.current_layer = *l;
-                    self.id = id;
+            Action::Layer(layer) => match layer {
+                Layer::Current(l) => {
+                    if *l < L {
+                        let modifier = action as *const _ as usize;
+                        if self.modifier == modifier {
+                            self.current_layer = self.default_layer;
+                            self.modifier = 0;
+                        } else {
+                            self.current_layer = *l;
+                            self.modifier = modifier;
+                        }
+                    }
                 }
-            }
-            Layer::Default(l) => {
-                if *l < self.n_layers {
-                    self.current_layer = *l;
-                    self.default_layer = *l;
-                    self.id = id;
+                Layer::Default(l) => {
+                    if *l < L {
+                        self.current_layer = *l;
+                        self.default_layer = *l;
+                    }
                 }
-            }
-            Layer::UndoCurrent(l) => {
-                if self.id == id && self.current_layer == *l {
-                    self.current_layer = self.default_layer
-                }
-            }
+            },
         }
     }
 

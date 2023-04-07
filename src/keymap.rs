@@ -3,32 +3,34 @@ use heapless::spsc::Producer;
 use crate::action::Act;
 use crate::debouncer::Debouncer;
 use crate::event::Event;
-use crate::handler::Handle;
+use crate::handler::{Handle, KeyHandler};
 use crate::performer::Performer;
 use crate::report::Report;
 
-pub struct Keymap<const L: usize, const N: usize, const DT: usize> {
-    keys: &'static [[&'static dyn Act; N]; L],
+pub struct Keymap<const N: usize, const L: usize, const DT: usize> {
     debouncers: [Debouncer<DT>; N],
     events: [Event; N],
     layers: [usize; N],
-    handlers: &'static [&'static dyn Handle],
-    performer: Performer,
+    enabled: [bool; N],
+    handlers: &'static [&'static dyn Handle<N, L>],
+    key_handler: KeyHandler<N, L>,
+    performer: Performer<L>,
 }
 
-impl<const L: usize, const N: usize, const DT: usize> Keymap<L, N, DT> {
+impl<const N: usize, const L: usize, const DT: usize> Keymap<N, L, DT> {
     pub fn new(
-        keys: &'static [[&'static dyn Act; N]; L],
-        handlers: &'static [&'static dyn Handle],
+        keys: &'static [[&'static dyn Act; L]; N],
+        handlers: &'static [&'static dyn Handle<N, L>],
         reports: Producer<'static, Report, 128>,
-    ) -> Keymap<L, N, DT> {
+    ) -> Keymap<N, L, DT> {
         Keymap {
-            keys,
             debouncers: [Debouncer::new(); N],
             events: [Event::new(); N],
             layers: [0; N],
+            enabled: [false; N],
             handlers,
-            performer: Performer::new(L, reports),
+            key_handler: KeyHandler::new(keys),
+            performer: Performer::new(reports),
         }
     }
 
@@ -48,141 +50,36 @@ impl<const L: usize, const N: usize, const DT: usize> Keymap<L, N, DT> {
                 }
             });
 
-        for (i, handler) in self.handlers.iter().enumerate() {
-            handler.handle(N + i, &mut self.events, &mut self.performer);
-        }
+        self.enabled.fill(true);
 
-        self.handle();
+        self.handlers.iter().for_each(|handler| {
+            handler.handle(
+                &self.layers,
+                &self.events,
+                &mut self.enabled,
+                &mut self.performer,
+            )
+        });
+
+        self.key_handler.handle(
+            &self.layers,
+            &self.events,
+            &mut self.enabled,
+            &mut self.performer,
+        );
     }
-
-    fn handle(&mut self) {
-        for (i, (key, event)) in self.keys[self.performer.current_layer()]
-            .iter()
-            .zip(self.events.iter())
-            .enumerate()
-        {
-            if let Some(action) = key.act(event) {
-                self.performer.perform(i, action);
-            }
-        }
-    }
-}
-
-// From https://veykril.github.io/tlborm/decl-macros/building-blocks/counting.html#bit-twiddling
-macro_rules! count_tts {
-    () => { 0 };
-    ($odd:tt $($a:tt $b:tt)*) => { ($crate::keymap::count_tts!($($a)*) << 1) | 1 };
-    ($($a:tt $even:tt)*) => { $crate::keymap::count_tts!($($a)*) << 1 };
-}
-pub(crate) use count_tts;
-
-macro_rules! count_layers {
-    ($([$($($x:expr),*);*]),*) => {$crate::keymap::count_tts!($([$($($x),*);*])*)};
-}
-pub(crate) use count_layers;
-
-macro_rules! count_keys {
-    ([$($($x0:expr),*);*], $([$($($x:expr),*);*]),*) => {$crate::keymap::count_tts!($($($x0)*)*)};
-}
-pub(crate) use count_keys;
-
-macro_rules! layer {
-    ($($($x: expr,)*;)*) => {
-        $crate::keymap::layer!(@flatten [] $($($x,)*;)*)
-    };
-    (@flatten [$($col:expr,)*] $($x0:expr, $($x:expr,)*;)*) => {
-        $crate::keymap::layer!(@flatten [$($col,)* $($x0,)*] $($($x,)*;)*)
-    };
-    (@flatten [$($col:expr,)*] $(;)*) => {
-        [$($col,)*]
-    };
-}
-pub(crate) use layer;
-
-#[macro_export]
-macro_rules! keys {
-    ($([$($($x:expr),+ $(,)?);* $(;)?]),* $(,)?) => {
-        [$($crate::keymap::layer!($($($x,)*;)*),)*]
-    };
 }
 
 #[macro_export]
 macro_rules! keymap {
     ([$([$($($x:expr),+ $(,)?);* $(;)?]),* $(,)?], $dt:literal, &$handlers:ident, $reports:ident) => {
         {
-            const N_LAYERS: usize = $crate::keymap::count_layers!($([$($($x),*);*]),*);
-            const N_KEYS: usize = $crate::keymap::count_keys!($([$($($x),*);*]),*);
-            const LAYERS: [[&'static dyn $crate::action::Act; N_KEYS] ;N_LAYERS] = $crate::keys!($([$($(&$x),*);*]),*);
-            Keymap::<N_LAYERS, N_KEYS, $dt>::new(&LAYERS, &$handlers, $reports)
+            const N_LAYERS: usize = $crate::handler::count_layers!($([$($($x),*);*]),*);
+            const N_KEYS: usize = $crate::handler::count_keys!($([$($($x),*);*]),*);
+            const KEYS: [[&'static dyn $crate::action::Act; N_LAYERS] ;N_KEYS] = $crate::handler::keys!($([$($(&$x),*);*]),*);
+            $crate::keymap::Keymap::<N_KEYS, N_LAYERS, $dt>::new(&KEYS, &$handlers, $reports)
         }
     };
-}
-
-#[cfg(test)]
-#[no_implicit_prelude]
-mod test_macros {
-    extern crate core;
-    extern crate heapless;
-    extern crate std;
-
-    macro_rules! layer {
-        ($($($x: expr,)*;)*) => {
-            "Wrong macro!"
-        };
-    }
-    macro_rules! count_tts {
-        () => {
-            "Wrong macro!"
-        };
-        ($odd:tt $($a:tt $b:tt)*) => {
-            "Wrong macro!"
-        };
-        ($($a:tt $even:tt)*) => {
-            "Wrong macro!"
-        };
-    }
-
-    use core::sync::atomic::AtomicBool;
-    use heapless::spsc::Queue;
-    use std::option::Option::{None, Some};
-
-    use crate::action::Action;
-    use crate::handler::chord::Chord;
-    use crate::handler::comb::Comb;
-    use crate::handler::Handle;
-    use crate::keymap::Keymap;
-    use crate::report::Report;
-    use crate::*;
-
-    static mut Q: Queue<Report, 128> = Queue::new();
-
-    static CHORD1: Chord<2> = chrd!(0, 2, [Some(kb!(Q)), None]);
-    static COMB1: Comb<2> = cmb!(2, [None, Some(&[kb!(C), kb!(D)])]);
-    static HANDLERS: [&'static dyn Handle; 2] = handlers![CHORD1, COMB1];
-
-    #[test]
-    fn test_layer_macros() {
-        keys![[kc!(A)]];
-        keys![[kc!(A),]];
-        keys![[kc!(A);]];
-        keys![[kc!(A),;]];
-
-        keys![[kc!(A),;kc!(A)]];
-        keys![[kc!(A),;kc!(A);]];
-
-        keys![[kc!(A),kc!(A);kc!(A),kc!(A),;]];
-
-        let p = unsafe { Q.split().0 };
-        keymap!([[
-            kc!(A), ht!(50, kb!(F), kb!(J));
-            kc!(A), prlc!(1);
-            kc!(A), prld!(1);],
-            [
-            kc!(B), kc!(B);
-            kc!(B), relu!(1);
-            kc!(B), prld!(0);
-            ]], 5, &HANDLERS, p);
-    }
 }
 
 #[cfg(test)]
@@ -203,7 +100,7 @@ mod test {
 
     static CHORD1: Chord<2> = chrd!(0, 2, [Some(kb!(Q)), None]);
     static COMB1: Comb<2> = cmb!(2, [None, Some(&[kb!(C), kb!(D)])]);
-    static HANDLERS: [&'static dyn Handle; 2] = handlers![CHORD1, COMB1];
+    static HANDLERS: [&'static dyn Handle<6, 2>; 2] = [&CHORD1, &COMB1];
 
     macro_rules! r {
         ($x:tt) => {
@@ -211,16 +108,16 @@ mod test {
         };
     }
 
-    struct Tester<const L: usize, const N: usize, const DT: usize> {
-        keymap: Keymap<L, N, DT>,
+    struct Tester<const N: usize, const L: usize, const DT: usize> {
+        keymap: Keymap<N, L, DT>,
         c: Consumer<'static, Report, 128>,
     }
 
-    impl<const L: usize, const N: usize, const DT: usize> Tester<L, N, DT> {
+    impl<const N: usize, const L: usize, const DT: usize> Tester<N, L, DT> {
         pub fn new(
-            keymap: Keymap<L, N, DT>,
+            keymap: Keymap<N, L, DT>,
             c: Consumer<'static, Report, 128>,
-        ) -> Tester<L, N, DT> {
+        ) -> Tester<N, L, DT> {
             Tester { keymap, c }
         }
 
@@ -254,7 +151,14 @@ mod test {
             }
             self.keymap.tick(&switches);
             for expected_output in expected_outputs {
-                assert_eq!(self.c.dequeue().unwrap(), *expected_output);
+                assert_eq!(
+                    self.c.dequeue().unwrap(),
+                    *expected_output,
+                    "Inputs: {:?} {:?} {:?}",
+                    ids,
+                    delays,
+                    expected_outputs
+                );
             }
         }
     }
@@ -262,26 +166,23 @@ mod test {
     #[test]
     fn test() {
         let (p, c) = unsafe { Q.split() };
-        let keymap: Keymap<2, 6, 5> = keymap!([[
+        let keymap: Keymap<6, 2, 5> = keymap!([[
             kc!(A), ht!(50, kb!(F), kb!(J));
             kc!(A), prlc!(1);
-            kc!(A), prld!(1);
+            kc!(A), pld!(1);
         ],
         [
             kc!(B), kc!(B);
-            kc!(B), relu!(1);
-            kc!(B), prld!(0);
+            kc!(B), kc!(B);
+            kc!(B), pld!(0);
         ]], 5, &HANDLERS, p);
 
         let mut tester = Tester::new(keymap, c);
-
         // 1 key
         tester.test(&[0], &[5], &[r!(A)]);
         // 2 keys
         tester.test(&[0, 1], &[0, 5], &[r!(A), r!(A)]);
-        // current layer 0 -> 1
-        tester.test(&[4, 0], &[6, 5], &[r!(B)]);
-        // current layer 1 -> 0 -> 1 -> 0
+        // current layer 0 -> 1 -> 0
         tester.test(&[4, 4, 0], &[6, 6, 5], &[r!(A)]);
         // default layer 0 -> 1
         tester.test(&[5, 5, 0], &[6, 0, 5], &[r!(B)]);

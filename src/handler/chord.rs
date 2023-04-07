@@ -6,7 +6,7 @@ use crate::handler::Handle;
 use crate::performer::Performer;
 
 pub struct Chord<const L: usize> {
-    is_triggered: AtomicBool,
+    triggered: AtomicBool,
     ids: (usize, usize),
     actions: [Option<Action>; L],
 }
@@ -14,41 +14,50 @@ pub struct Chord<const L: usize> {
 impl<const L: usize> Chord<L> {
     pub const fn new(ids: (usize, usize), actions: [Option<Action>; L]) -> Chord<L> {
         Chord {
-            is_triggered: AtomicBool::new(false),
+            triggered: AtomicBool::new(false),
             ids,
             actions,
         }
     }
 }
 
-impl<const L: usize> Handle for Chord<L> {
-    fn handle(&self, id: usize, events: &mut [Event], performer: &mut Performer) {
+impl<const N: usize, const L: usize> Handle<N, L> for Chord<L> {
+    fn handle(
+        &self,
+        layers: &[usize; N],
+        events: &[Event; N],
+        enabled: &mut [bool; N],
+        performer: &mut Performer<L>,
+    ) {
         let (id0, id1) = self.ids;
 
-        if let Some(action) = &self.actions[performer.current_layer()] {
-            match self.is_triggered.load(Ordering::Relaxed) {
-                false => match (events[id0], events[id1]) {
-                    (Event::Press(_), Event::Pressed(_))
-                    | (Event::Pressed(_), Event::Press(_))
-                    | (Event::Press(_), Event::Press(_)) => {
-                        self.is_triggered.store(true, Ordering::Relaxed);
-                        performer.perform(id, action);
-                        events[id0] = Event::Released(0);
-                        events[id1] = Event::Released(0);
-                    }
-                    _ => {}
-                },
-                true => {
-                    match (events[id0], events[id1]) {
-                        (Event::Release(_), Event::Released(_))
-                        | (Event::Released(_), Event::Release(_))
-                        | (Event::Release(_), Event::Release(_)) => {
-                            self.is_triggered.store(false, Ordering::Relaxed);
+        if enabled[id0] && enabled[id1] && (layers[id0] == layers[id1]) {
+            let layer = layers[id0];
+            if let Some(action) = &self.actions[layer] {
+                match self.triggered.load(Ordering::Relaxed) {
+                    false => match (events[id0], events[id1]) {
+                        (Event::Press(_), Event::Pressed(_))
+                        | (Event::Pressed(_), Event::Press(_))
+                        | (Event::Press(_), Event::Press(_)) => {
+                            self.triggered.store(true, Ordering::Relaxed);
+                            enabled[id0] = false;
+                            enabled[id1] = false;
+                            performer.perform(action);
                         }
                         _ => {}
+                    },
+                    true => {
+                        enabled[id0] = false;
+                        enabled[id1] = false;
+                        match (events[id0], events[id1]) {
+                            (Event::Release(_), Event::Released(_))
+                            | (Event::Released(_), Event::Release(_))
+                            | (Event::Release(_), Event::Release(_)) => {
+                                self.triggered.store(false, Ordering::Relaxed);
+                            }
+                            _ => {}
+                        }
                     }
-                    events[id0] = Event::Released(0);
-                    events[id1] = Event::Released(0);
                 }
             }
         }

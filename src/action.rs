@@ -15,13 +15,13 @@ pub enum Action {
 pub enum Layer {
     Default(usize),
     Current(usize),
-    UndoCurrent(usize),
 }
 
 pub struct PressAction(Action);
 pub struct PressedAction(Action);
 pub struct ReleaseAction(Action);
 pub struct ReleasedAction(Action);
+pub struct PressReleaseAction(Action);
 
 impl PressAction {
     pub const fn new(action: Action) -> PressAction {
@@ -44,6 +44,12 @@ impl ReleaseAction {
 impl ReleasedAction {
     pub const fn new(action: Action) -> ReleasedAction {
         ReleasedAction(action)
+    }
+}
+
+impl PressReleaseAction {
+    pub const fn new(action: Action) -> PressReleaseAction {
+        PressReleaseAction(action)
     }
 }
 
@@ -83,6 +89,15 @@ impl Act for ReleasedAction {
     }
 }
 
+impl Act for PressReleaseAction {
+    fn act(&self, event: &Event) -> Option<&Action> {
+        match event {
+            Event::Press(_) | Event::Release(_) => Some(&self.0),
+            _ => None,
+        }
+    }
+}
+
 // Action Macros
 
 // Keyboard Report
@@ -116,25 +131,17 @@ macro_rules! dk {
 // Layer Default
 #[macro_export]
 macro_rules! ld {
-    ($x: tt) => {
+    ($x: tt) => {{
         $crate::action::Action::Layer($crate::action::Layer::Default($x))
-    };
+    }};
 }
 
 // Layer Current
 #[macro_export]
 macro_rules! lc {
-    ($x: tt) => {
+    ($x: tt) => {{
         $crate::action::Action::Layer($crate::action::Layer::Current($x))
-    };
-}
-
-// Layer Undo
-#[macro_export]
-macro_rules! lu {
-    ($x: tt) => {
-        $crate::action::Action::Layer($crate::action::Layer::UndoCurrent($x))
-    };
+    }};
 }
 
 // Action Macros
@@ -149,7 +156,7 @@ macro_rules! pdkb {
 
 // Press Keyboard Report
 #[macro_export]
-macro_rules! prcu {
+macro_rules! pcu {
     ($x:tt) => {
         $crate::action::PressAction::new($crate::cu!($x))
     };
@@ -165,7 +172,7 @@ macro_rules! pdcu {
 
 // Press Desktop Report
 #[macro_export]
-macro_rules! prdk {
+macro_rules! pdk {
     ($x:tt) => {
         $crate::action::PressAction::new($crate::dk!($x))
     };
@@ -181,25 +188,17 @@ macro_rules! pddk {
 
 // Press Layer Default
 #[macro_export]
-macro_rules! prld {
+macro_rules! pld {
     ($x:tt) => {
         $crate::action::PressAction::new($crate::ld!($x))
     };
 }
 
-// Press Layer Current
+// PressRelease Layer Current
 #[macro_export]
 macro_rules! prlc {
     ($x:tt) => {
-        $crate::action::PressAction::new($crate::lc!($x))
-    };
-}
-
-// Press Layer Undo
-#[macro_export]
-macro_rules! relu {
-    ($x:tt) => {
-        $crate::action::ReleaseAction::new($crate::lu!($x))
+        $crate::action::PressReleaseAction::new($crate::lc!($x))
     };
 }
 
@@ -335,19 +334,19 @@ macro_rules! kc {
 
 
     // Desktop
-    (PWR)  => {$crate::prdk!(SystemPowerDown)};
-    (SLEP) => {$crate::prdk!(SystemSleep)};
-    (WAKE) => {$crate::prdk!(SystemWakeUp)};
+    (PWR)  => {$crate::pdk!(SystemPowerDown)};
+    (SLEP) => {$crate::pdk!(SystemSleep)};
+    (WAKE) => {$crate::pdk!(SystemWakeUp)};
 
 
     // Customer
-    (MUTE) => {$crate::prcu!(Mute)};
+    (MUTE) => {$crate::pcu!(Mute)};
     (VOLU) => {$crate::pdcu!(VolumeIncrement)};
     (VOLD) => {$crate::pdcu!(VolumeDecrement)};
     (MNXT) => {$crate::pdcu!(TrackingIncrement)};
     (MPRV) => {$crate::pdcu!(TrackingDecrement)};
-    (MSTP) => {$crate::prcu!(Stop)};
-    (MPLY) => {$crate::prcu!(PlayPause)};
+    (MSTP) => {$crate::pcu!(Stop)};
+    (MPLY) => {$crate::pcu!(PlayPause)};
 }
 
 #[cfg(test)]
@@ -363,15 +362,13 @@ mod test {
 
         pdkb!(A);
 
-        prcu!(VolumeIncrement);
+        pcu!(VolumeIncrement);
         pdcu!(VolumeIncrement);
 
-        lu!(0);
         ld!(0);
         lc!(0);
         prlc!(0);
-        prld!(0);
-        relu!(0);
+        pld!(0);
 
         kc!(NO);
         kc!(A);
