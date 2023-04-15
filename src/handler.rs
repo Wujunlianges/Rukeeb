@@ -25,7 +25,7 @@ impl<const N: usize, const L: usize> Handle<N, L> for KeyHandler<N, L> {
         self.keys
             .iter()
             .zip(states)
-            .for_each(|(key, State(enabled, layer, event))| {
+            .for_each(|(key, State(enabled, event, layer))| {
                 if *enabled {
                     if let Some(action) = key[*layer].act(event) {
                         performer.perform(action)

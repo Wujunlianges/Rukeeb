@@ -32,12 +32,16 @@ impl<const N: usize, const L: usize, const DT: usize> Keymap<N, L, DT> {
     }
 
     pub fn tick(&mut self, switches: &[bool]) {
+        let current_layer = self.performer.current_layer();
+
         switches
             .iter()
             .zip(self.debouncers.iter_mut())
             .zip(self.states.iter_mut())
             .for_each(|((switch, debouncer), state)| {
-                state.update(debouncer.trigger(*switch), self.performer.current_layer())
+                state.enable();
+                state.event(debouncer.trigger(*switch));
+                state.layer(current_layer);
             });
 
         self.handlers

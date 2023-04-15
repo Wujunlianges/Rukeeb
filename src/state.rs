@@ -1,7 +1,7 @@
 use crate::event::Event;
 
 #[derive(Clone, Copy, Default)]
-pub struct State(pub bool, pub usize, pub Event);
+pub struct State(pub bool, pub Event, pub usize);
 
 impl State {
     pub fn new() -> State {
@@ -12,11 +12,17 @@ impl State {
         self.0 = false;
     }
 
-    pub fn update(&mut self, event: Event, layer: usize) {
+    pub fn enable(&mut self) {
         self.0 = true;
-        self.2 = event;
-        if let Event::Press(_) = self.2 {
-            self.1 = layer;
+    }
+
+    pub fn event(&mut self, event: Event) {
+        self.1 = event;
+    }
+
+    pub fn layer(&mut self, layer: usize) {
+        if let Event::Press(_) = self.1 {
+            self.2 = layer;
         }
     }
 }

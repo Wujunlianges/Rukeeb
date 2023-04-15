@@ -16,10 +16,10 @@ impl<const L: usize> Comb<L> {
 
 impl<const N: usize, const L: usize> Handle<N, L> for Comb<L> {
     fn handle(&self, states: &mut [State; N], performer: &mut Performer<L>) {
-        let State(enabled, layer, event) = &mut states[self.id];
+        let State(enabled, event, layer) = &mut states[self.id];
         if *enabled {
-            if let Some(actions) = self.actions[*layer] {
-                if let Event::Press(_) = event {
+            if let Event::Press(_) = event {
+                if let Some(actions) = self.actions[*layer] {
                     actions.iter().for_each(|action| {
                         performer.perform(action);
                     });
