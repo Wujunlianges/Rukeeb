@@ -1,11 +1,10 @@
 #![allow(unused_imports)]
 #![allow(unused_macros)]
 #![no_std]
-pub mod action;
+pub mod handler;
 pub mod debouncer;
 pub mod event;
-pub mod handler;
+pub mod function;
 pub mod keymap;
-pub mod performer;
+pub mod processor;
 pub mod report;
-pub mod state;

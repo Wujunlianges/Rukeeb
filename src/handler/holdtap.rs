@@ -1,20 +1,20 @@
-use crate::action::{Act, Action};
 use crate::event::Event;
+use crate::handler::{Function, Handle};
 
 pub struct HoldTap {
     thold: usize,
-    hold: Action,
-    tap: Action,
+    hold: Function,
+    tap: Function,
 }
 
 impl HoldTap {
-    pub const fn new(thold: usize, hold: Action, tap: Action) -> HoldTap {
+    pub const fn new(thold: usize, hold: Function, tap: Function) -> HoldTap {
         HoldTap { thold, hold, tap }
     }
 }
 
-impl Act for HoldTap {
-    fn act(&self, event: &Event) -> Option<&Action> {
+impl Handle for HoldTap {
+    fn handle(&self, event: &Event) -> Option<&Function> {
         match event {
             Event::Pressed(i) if *i == self.thold => Some(&self.hold),
             Event::Release(i) if *i < self.thold => Some(&self.tap),
@@ -26,7 +26,7 @@ impl Act for HoldTap {
 #[macro_export]
 macro_rules! ht {
     ($thold:literal, $hold:expr, $tap: expr) => {
-        $crate::action::holdtap::HoldTap::new($thold, $hold, $tap)
+        $crate::handler::holdtap::HoldTap::new($thold, $hold, $tap)
     };
 }
 
