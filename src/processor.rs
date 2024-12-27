@@ -35,7 +35,7 @@ impl<const N: usize, const L: usize> Process<N, L> for KeyProcessor<N, L> {
         let keys = &self.keys[layer];
 
         for (handler, event, key) in izip!(handlers, events, keys) {
-            if let Event::Press(_) = event {
+            if matches!(event, Event::Press(_)) {
                 if handler.is_none() {
                     *handler = Some(*key);
                 }

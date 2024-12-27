@@ -48,7 +48,7 @@ impl<const N: usize, const L: usize> Keymap<N, L> for BasicKeymap<N, L> {
                     }
                 }
             }
-            if let Event::Released(_) = event {
+            if matches!(event, Event::Released(_)) {
                 *handler = None;
             }
         }
@@ -57,15 +57,15 @@ impl<const N: usize, const L: usize> Keymap<N, L> for BasicKeymap<N, L> {
 
 impl<const N: usize, const L: usize> BasicKeymap<N, L> {
     pub fn new(
-        handlers: &'static [&'static dyn Process<N, L>],
-        reporter: Producer<'static, Report, 128>,
+        processors: &'static [&'static dyn Process<N, L>],
+        reporter: Producer<'static, Report, MAX_REPORTS>,
     ) -> BasicKeymap<N, L> {
         BasicKeymap {
-            events: [Event::Released(0); N],
+            events: [Event::default(); N],
             handlers: [None; N],
             layer: 0,
-            debouncers: [Debouncer::<5>::new(); N],
-            processors: handlers,
+            debouncers: [Debouncer::<DT>::new(); N],
+            processors,
             reporter,
         }
     }
@@ -83,6 +83,8 @@ mod test {
     use crate::report::{Keyboard, Report};
     use crate::*;
 
+    const MAX_REPORTS: usize = 128;
+
     macro_rules! r {
         ($x:tt) => {
             Report::Keyboard(Keyboard::$x)
@@ -91,13 +93,13 @@ mod test {
 
     struct Tester<const N: usize, const L: usize> {
         keymap: BasicKeymap<N, L>,
-        consumer: Consumer<'static, Report, 128>,
+        consumer: Consumer<'static, Report, MAX_REPORTS>,
     }
 
     impl<const N: usize, const L: usize> Tester<N, L> {
         pub fn new(
             keymap: BasicKeymap<N, L>,
-            consumer: Consumer<'static, Report, 128>,
+            consumer: Consumer<'static, Report, MAX_REPORTS>,
         ) -> Tester<N, L> {
             Tester { keymap, consumer }
         }
@@ -145,7 +147,7 @@ mod test {
         }
     }
 
-    static mut Q: Queue<Report, 128> = Queue::new();
+    static mut Q: Queue<Report, MAX_REPORTS> = Queue::new();
     const N: usize = 6;
     const L: usize = 3;
     static KEYS: [[&dyn Handle; N]; L] = keys!(

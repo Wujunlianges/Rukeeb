@@ -7,7 +7,7 @@ pub enum Event {
 }
 
 impl Default for Event {
-    fn default() -> Self {
+    fn default() -> Event {
         Event::Released(0)
     }
 }

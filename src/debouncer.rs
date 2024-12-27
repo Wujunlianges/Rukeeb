@@ -11,7 +11,7 @@ pub enum Counter {
 }
 
 impl Default for Counter {
-    fn default() -> Self {
+    fn default() -> Counter {
         Counter::Released(0)
     }
 }
