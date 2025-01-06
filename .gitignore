@@ -1,4 +1,3 @@
-/target
+/.vscode
 /Cargo.lock
-/rukeeb-macro/target
-/rukeeb-macro/Cargo.lock
+/target

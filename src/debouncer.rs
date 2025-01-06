@@ -6,8 +6,8 @@ pub trait Debounce {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Counter {
-    Pressed(usize),
-    Released(usize),
+    Pressed(u8),
+    Released(u8),
 }
 
 impl Default for Counter {
@@ -62,12 +62,12 @@ impl Counter {
 }
 
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
-pub struct Debouncer<const DT: usize> {
+pub struct Debouncer<const DT: u8> {
     buffer: Counter,
     counter: Counter,
 }
 
-impl<const DT: usize> Debouncer<DT> {
+impl<const DT: u8> Debouncer<DT> {
     pub fn new() -> Debouncer<DT> {
         Debouncer {
             ..Default::default()
@@ -91,7 +91,7 @@ impl<const DT: usize> Debouncer<DT> {
     }
 }
 
-impl<const DT: usize> Debounce for Debouncer<DT> {
+impl<const DT: u8> Debounce for Debouncer<DT> {
     fn debounce(&mut self, switch: bool) -> Event {
         match switch {
             true => self.press(),
@@ -107,50 +107,45 @@ mod test {
     #[test]
     fn hold() {
         let mut debouncer = Debouncer::<5>::new();
-        let mut event = Event::Released(0);
 
-        (0..10).for_each(|_| {
-            event = debouncer.release();
+        (1..=10).for_each(|i| {
+            assert_eq!(debouncer.release(), Event::Released(i));
         });
-        assert_eq!(event, Event::Released(10));
 
-        (0..11).for_each(|_| {
-            event = debouncer.press();
+        (1..=5).for_each(|i| {
+            assert_eq!(debouncer.press(), Event::Released(10 + i));
         });
-        assert_eq!(event, Event::Pressed(5));
 
-        (0..11).for_each(|_| {
-            event = debouncer.release();
+        assert_eq!(debouncer.press(), Event::Press(15));
+
+        (1..=5).for_each(|i| {
+            assert_eq!(debouncer.release(), Event::Pressed(i));
         });
-        assert_eq!(event, Event::Released(5));
+
+        assert_eq!(debouncer.release(), Event::Release(5));
     }
 
     #[test]
     fn wobble() {
         let mut debouncer = Debouncer::<5>::new();
-        let mut event = Event::Released(0);
 
-        (0..10).for_each(|_| {
+        (1..=10).for_each(|i| {
             debouncer.release();
             debouncer.press();
             debouncer.press();
             debouncer.press();
             debouncer.press();
-            event = debouncer.press();
+            assert_eq!(debouncer.press(), Event::Released(6 * i));
         });
-
-        assert_eq!(event, Event::Released(60));
     }
 
     #[test]
     fn no_debounce() {
         let mut debouncer = Debouncer::<0>::new();
-        let mut event = Event::Released(1);
 
-        (0..10).for_each(|_| {
-            event = debouncer.press();
+        assert_eq!(debouncer.press(), Event::Press(0));
+        (1..=10).for_each(|i| {
+            assert_eq!(debouncer.press(), Event::Pressed(i));
         });
-
-        assert_eq!(event, Event::Pressed(9));
     }
 }

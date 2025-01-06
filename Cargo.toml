@@ -8,4 +8,3 @@ edition = "2021"
 [dependencies]
 heapless = "0.8"
 usbd-human-interface-device = "0.5"
-itertools = "0.13.0"

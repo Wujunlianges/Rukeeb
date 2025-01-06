@@ -1,4 +1,4 @@
-pub use usbd_human_interface_device::page::*;
+pub use usbd_human_interface_device::page::{Consumer, Desktop, Keyboard};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Report {

@@ -2,13 +2,13 @@ use crate::event::Event;
 use crate::handler::{Function, Handle};
 
 pub struct HoldTap {
-    thold: usize,
+    thold: u8,
     hold: Function,
     tap: Function,
 }
 
 impl HoldTap {
-    pub const fn new(thold: usize, hold: Function, tap: Function) -> HoldTap {
+    pub const fn new(thold: u8, hold: Function, tap: Function) -> HoldTap {
         HoldTap { thold, hold, tap }
     }
 }

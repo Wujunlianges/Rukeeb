@@ -3,10 +3,8 @@ use crate::report::Report;
 #[derive(Clone, Copy)]
 pub enum Function {
     Report(Report),
-    Layer(usize),
+    Layer(u8),
 }
-
-// Function Macros
 
 // Keyboard Report
 #[macro_export]
