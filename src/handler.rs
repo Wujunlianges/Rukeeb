@@ -20,7 +20,7 @@ impl Hold {
 impl Handle for Hold {
     fn handle(&self, event: &Event) -> Option<&Function> {
         match event {
-            Event::Press(_) | Event::Pressed(_) => Some(&self.0),
+            Event::Pressing(_) | Event::Pressed(_) => Some(&self.0),
             _ => None,
         }
     }
@@ -35,7 +35,7 @@ impl Tap {
 impl Handle for Tap {
     fn handle(&self, event: &Event) -> Option<&Function> {
         match event {
-            Event::Press(_) => Some(&self.0),
+            Event::Pressing(_) => Some(&self.0),
             _ => None,
         }
     }
@@ -50,8 +50,8 @@ impl OnOff {
 impl Handle for OnOff {
     fn handle(&self, event: &Event) -> Option<&Function> {
         match event {
-            Event::Press(_) => Some(&self.0),
-            Event::Release(_) => Some(&self.1),
+            Event::Pressing(_) => Some(&self.0),
+            Event::Releasing(_) => Some(&self.1),
             _ => None,
         }
     }

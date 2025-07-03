@@ -17,7 +17,7 @@ impl Handle for HoldTap {
     fn handle(&self, event: &Event) -> Option<&Function> {
         match event {
             Event::Pressed(i) if *i == self.thold => Some(&self.hold),
-            Event::Release(i) if *i < self.thold => Some(&self.tap),
+            Event::Releasing(i) if *i < self.thold => Some(&self.tap),
             _ => None,
         }
     }

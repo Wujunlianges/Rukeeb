@@ -29,7 +29,7 @@ impl Counter {
             }
             Counter::Released(i) => {
                 *self = Counter::Pressed(0);
-                Event::Press(i)
+                Event::Pressing(i)
             }
         }
     }
@@ -38,7 +38,7 @@ impl Counter {
         match *self {
             Counter::Pressed(i) => {
                 *self = Counter::Released(0);
-                Event::Release(i)
+                Event::Releasing(i)
             }
             Counter::Released(i) => {
                 *self = Counter::Released(i.saturating_add(1));
@@ -116,13 +116,13 @@ mod test {
             assert_eq!(debouncer.press(), Event::Released(10 + i));
         });
 
-        assert_eq!(debouncer.press(), Event::Press(15));
+        assert_eq!(debouncer.press(), Event::Pressing(15));
 
         (1..=5).for_each(|i| {
             assert_eq!(debouncer.release(), Event::Pressed(i));
         });
 
-        assert_eq!(debouncer.release(), Event::Release(5));
+        assert_eq!(debouncer.release(), Event::Releasing(5));
     }
 
     #[test]
@@ -143,7 +143,7 @@ mod test {
     fn no_debounce() {
         let mut debouncer = Debouncer::<0>::new();
 
-        assert_eq!(debouncer.press(), Event::Press(0));
+        assert_eq!(debouncer.press(), Event::Pressing(0));
         (1..=10).for_each(|i| {
             assert_eq!(debouncer.press(), Event::Pressed(i));
         });

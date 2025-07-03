@@ -36,7 +36,7 @@ impl<const N: usize, const L: usize> Process<N, L> for Processor<N, L> {
             .iter_mut()
             .zip(events.iter().zip(keys.iter()))
             .for_each(|(handler, (event, key))| {
-                if matches!(event, Event::Press(_)) && handler.is_none() {
+                if matches!(event, Event::Pressing(_)) && handler.is_none() {
                     *handler = Some(*key);
                 }
             });

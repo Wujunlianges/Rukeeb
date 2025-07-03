@@ -25,20 +25,14 @@ impl<const N: usize, const L: usize> Process<N, L> for Chord<L> {
         layer: usize,
     ) {
         let (id0, id1) = self.ids;
-        let event0 = events[id0];
-        let event1 = events[id1];
+        let (e0, e1) = (events[id0], events[id1]);
         if let Some(handler) = self.handlers[layer] {
-            match (event0, event1) {
-                (Event::Pressed(_), Event::Pressed(_))
-                | (Event::Pressed(_), Event::Press(_))
-                | (Event::Press(_), Event::Pressed(_))
-                | (Event::Press(_), Event::Press(_)) => {
+            match (e0, e1) {
+                (Event::Pressing(_), Event::Pressed(_))
+                | (Event::Pressed(_), Event::Pressing(_))
+                | (Event::Pressing(_), Event::Pressing(_)) => {
                     handlers[id0] = Some(handler);
                     handlers[id1] = Some(handler);
-                }
-                (Event::Release(_), Event::Pressed(_)) | (Event::Pressed(_), Event::Release(_)) => {
-                    handlers[id0] = None;
-                    handlers[id1] = None;
                 }
                 _ => {}
             }
