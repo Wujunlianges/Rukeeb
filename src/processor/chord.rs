@@ -1,8 +1,4 @@
-use core::cmp::{max, min};
-use core::sync::atomic::{AtomicBool, Ordering};
-
 use crate::event::Event;
-use crate::function::Function;
 use crate::handler::Handle;
 use crate::processor::Process;
 

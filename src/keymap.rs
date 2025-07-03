@@ -1,5 +1,4 @@
 use heapless::spsc::Producer;
-use heapless::Vec;
 
 use crate::debouncer::{Debounce, Debouncer};
 use crate::event::Event;
@@ -39,10 +38,15 @@ impl<const N: usize, const L: usize> Keymap<N, L> {
             .iter_mut()
             .zip(self.events.iter())
             .for_each(|(handler, event)| {
-                if let Some(Some(function)) = handler.map(|h| h.handle(event)) {
-                    match function {
-                        Function::Report(report) => self.reporter.enqueue(*report).unwrap(),
-                        Function::Layer(layer) => self.layer = *layer as usize,
+                if let Some(Some(functions)) = handler.map(|h| h.handle(event)) {
+                    for function in functions {
+                        match function {
+                            Function::Report(report) => {
+                                assert!(true);
+                                self.reporter.enqueue(*report).unwrap()
+                            }
+                            Function::Layer(layer) => self.layer = *layer as usize,
+                        }
                     }
                 }
                 if matches!(event, Event::Released(_)) {
@@ -72,7 +76,6 @@ impl<const N: usize, const L: usize> Keymap<N, L> {
 mod test {
     use heapless::spsc::{Consumer, Queue};
 
-    use crate::debouncer::{Debounce, Debouncer};
     use crate::handler::Handle;
     use crate::keymap::Keymap;
     use crate::processor::chord::Chord;
@@ -103,7 +106,8 @@ mod test {
         }
 
         fn reset_keys(&mut self) {
-            (0..11).for_each(|_| {
+            self.keymap.layer = 0;
+            (0..128).for_each(|_| {
                 self.keymap.tick(&[false; N]);
             });
             while self.consumer.ready() {
@@ -119,15 +123,18 @@ mod test {
                 for i in id {
                     switches[*i] ^= true;
                 }
-                (0..DT + 1).for_each(|_| {
+                (0..DT).for_each(|_| {
                     self.keymap.tick(&switches);
-                    res = self.consumer.dequeue();
+                    while self.consumer.ready() {
+                        res = self.consumer.dequeue();
+                    }
                 });
+                self.keymap.tick(&switches);
             });
 
             expected_outputs.iter().for_each(|expected_output| {
                 assert_eq!(
-                    res.unwrap(),
+                    self.consumer.dequeue().unwrap_or(Report::Custom(123)),
                     *expected_output,
                     "Inputs: {:?} {:?}",
                     ids,
@@ -140,11 +147,12 @@ mod test {
     static mut Q: Queue<Report, MAX_REPORTS> = Queue::new();
     const N: usize = 6;
     const L: usize = 3;
+    static TAP_COMB: handler::TapComb = handler::TapComb::new(&[kb!(W), kb!(E)]);
     static KEYS: [[&dyn Handle; N]; L] = keys!(
         [
             kc!(A), ht!(12, kb!(F), kb!(J));
             kc!(A), lyoo!(1, 0);
-            kc!(A), lytp!(1);
+            TAP_COMB, lytp!(1);
         ],
         [
             kc!(B), kc!(B);
@@ -178,5 +186,7 @@ mod test {
         tester.test(&[&[1, 2]], &[r!(Q)]); // chording 1
         tester.test(&[&[1, 2], &[1, 2], &[1]], &[r!(A)]); // chording 1
         tester.test(&[&[4, 2], &[4, 2], &[0]], &[r!(B)]); // chording 2
+
+        tester.test(&[&[2]], &[r!(W), r!(E)]); // tapcomb
     }
 }

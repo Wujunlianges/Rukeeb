@@ -4,12 +4,13 @@ use crate::function::Function;
 pub mod holdtap;
 
 pub trait Handle: Sync {
-    fn handle(&self, event: &Event) -> Option<&Function>;
+    fn handle(&self, event: &Event) -> Option<&[Function]>;
 }
 
 pub struct Hold(Function);
 pub struct Tap(Function);
 pub struct OnOff(Function, Function);
+pub struct TapComb(&'static [Function]);
 
 impl Hold {
     pub const fn new(f: Function) -> Hold {
@@ -18,9 +19,9 @@ impl Hold {
 }
 
 impl Handle for Hold {
-    fn handle(&self, event: &Event) -> Option<&Function> {
+    fn handle(&self, event: &Event) -> Option<&[Function]> {
         match event {
-            Event::Pressing(_) | Event::Pressed(_) => Some(&self.0),
+            Event::Pressing(_) | Event::Pressed(_) => Some(core::slice::from_ref(&self.0)),
             _ => None,
         }
     }
@@ -33,9 +34,9 @@ impl Tap {
 }
 
 impl Handle for Tap {
-    fn handle(&self, event: &Event) -> Option<&Function> {
+    fn handle(&self, event: &Event) -> Option<&[Function]> {
         match event {
-            Event::Pressing(_) => Some(&self.0),
+            Event::Pressing(_) => Some(core::slice::from_ref(&self.0)),
             _ => None,
         }
     }
@@ -48,10 +49,25 @@ impl OnOff {
 }
 
 impl Handle for OnOff {
-    fn handle(&self, event: &Event) -> Option<&Function> {
+    fn handle(&self, event: &Event) -> Option<&[Function]> {
         match event {
-            Event::Pressing(_) => Some(&self.0),
-            Event::Releasing(_) => Some(&self.1),
+            Event::Pressing(_) => Some(core::slice::from_ref(&self.0)),
+            Event::Releasing(_) => Some(core::slice::from_ref(&self.1)),
+            _ => None,
+        }
+    }
+}
+
+impl TapComb {
+    pub const fn new(fs: &'static [Function]) -> TapComb {
+        TapComb(fs)
+    }
+}
+
+impl Handle for TapComb {
+    fn handle(&self, event: &Event) -> Option<&[Function]> {
+        match event {
+            Event::Pressing(_) => Some(self.0),
             _ => None,
         }
     }

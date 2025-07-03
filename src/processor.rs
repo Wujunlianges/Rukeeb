@@ -1,6 +1,5 @@
 use crate::event::Event;
-use crate::function::Function;
-use crate::handler::{self, Handle};
+use crate::handler::Handle;
 
 pub mod chord;
 
