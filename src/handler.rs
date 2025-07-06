@@ -1,6 +1,7 @@
 use crate::event::Event;
 use crate::function::Function;
 
+pub mod tapcomb;
 pub mod holdtap;
 
 pub trait Handle: Sync {
@@ -10,7 +11,6 @@ pub trait Handle: Sync {
 pub struct Hold(Function);
 pub struct Tap(Function);
 pub struct OnOff(Function, Function);
-pub struct TapComb(&'static [Function]);
 
 impl Hold {
     pub const fn new(f: Function) -> Hold {
@@ -53,21 +53,6 @@ impl Handle for OnOff {
         match event {
             Event::Pressing(_) => Some(core::slice::from_ref(&self.0)),
             Event::Releasing(_) => Some(core::slice::from_ref(&self.1)),
-            _ => None,
-        }
-    }
-}
-
-impl TapComb {
-    pub const fn new(fs: &'static [Function]) -> TapComb {
-        TapComb(fs)
-    }
-}
-
-impl Handle for TapComb {
-    fn handle(&self, event: &Event) -> Option<&[Function]> {
-        match event {
-            Event::Pressing(_) => Some(self.0),
             _ => None,
         }
     }

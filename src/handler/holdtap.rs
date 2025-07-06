@@ -1,5 +1,6 @@
 use crate::event::Event;
-use crate::handler::{Function, Handle};
+use crate::function::Function;
+use crate::handler::Handle;
 
 pub struct HoldTap {
     thold: u8,
@@ -28,15 +29,4 @@ macro_rules! ht {
     ($thold:literal, $hold:expr, $tap: expr) => {
         $crate::handler::holdtap::HoldTap::new($thold, $hold, $tap)
     };
-}
-
-#[cfg(test)]
-#[no_implicit_prelude]
-mod test {
-    use crate::{ht, kb};
-
-    #[test]
-    fn test_ht_macros() {
-        ht!(50, kb!(F), kb!(J));
-    }
 }

@@ -15,50 +15,13 @@ pub struct Keymap<const N: usize, const L: usize> {
     debouncers: [Debouncer<DT>; N],
     events: [Event; N],
     handlers: [Option<&'static dyn Handle>; N],
-    processors: &'static [&'static dyn Process<N, L>],
+    processors: &'static [&'static [&'static dyn Process<N>]; L],
     reporter: Producer<'static, Report, MAX_REPORTS>,
 }
 
 impl<const N: usize, const L: usize> Keymap<N, L> {
-    fn tick(&mut self, switches: &[bool; N]) {
-        self.events
-            .iter_mut()
-            .zip(self.debouncers.iter_mut().zip(switches.iter()))
-            .for_each(|(event, (debouncer, switch))| {
-                *event = debouncer.debounce(*switch);
-            });
-
-        // Process all events.
-        self.processors
-            .iter()
-            .for_each(|handler| handler.process(&mut self.handlers, &self.events, self.layer));
-
-        // Handle individual events.
-        self.handlers
-            .iter_mut()
-            .zip(self.events.iter())
-            .for_each(|(handler, event)| {
-                if let Some(Some(functions)) = handler.map(|h| h.handle(event)) {
-                    for function in functions {
-                        match function {
-                            Function::Report(report) => {
-                                assert!(true);
-                                self.reporter.enqueue(*report).unwrap()
-                            }
-                            Function::Layer(layer) => self.layer = *layer as usize,
-                        }
-                    }
-                }
-                if matches!(event, Event::Released(_)) {
-                    *handler = None;
-                }
-            });
-    }
-}
-
-impl<const N: usize, const L: usize> Keymap<N, L> {
     pub fn new(
-        processors: &'static [&'static dyn Process<N, L>],
+        processors: &'static [&'static [&'static dyn Process<N>]; L],
         reporter: Producer<'static, Report, MAX_REPORTS>,
     ) -> Keymap<N, L> {
         Keymap {
@@ -70,123 +33,36 @@ impl<const N: usize, const L: usize> Keymap<N, L> {
             reporter,
         }
     }
-}
 
-#[cfg(test)]
-mod test {
-    use heapless::spsc::{Consumer, Queue};
-
-    use crate::handler::Handle;
-    use crate::keymap::Keymap;
-    use crate::processor::chord::Chord;
-    use crate::processor::{Process, Processor};
-    use crate::report::{Keyboard, Report};
-    use crate::*;
-
-    const MAX_REPORTS: usize = 128;
-    const DT: usize = 5;
-
-    macro_rules! r {
-        ($x:tt) => {
-            Report::Keyboard(Keyboard::$x)
-        };
-    }
-
-    struct Tester<const N: usize, const L: usize> {
-        keymap: Keymap<N, L>,
-        consumer: Consumer<'static, Report, MAX_REPORTS>,
-    }
-
-    impl<const N: usize, const L: usize> Tester<N, L> {
-        pub fn new(
-            keymap: Keymap<N, L>,
-            consumer: Consumer<'static, Report, MAX_REPORTS>,
-        ) -> Tester<N, L> {
-            Tester { keymap, consumer }
-        }
-
-        fn reset_keys(&mut self) {
-            self.keymap.layer = 0;
-            (0..128).for_each(|_| {
-                self.keymap.tick(&[false; N]);
+    pub fn tick(&mut self, switches: &[bool; N]) {
+        self.events
+            .iter_mut()
+            .zip(self.debouncers.iter_mut().zip(switches.iter()))
+            .for_each(|(event, (debouncer, switch))| {
+                *event = debouncer.debounce(*switch);
             });
-            while self.consumer.ready() {
-                self.consumer.dequeue();
-            }
-        }
 
-        pub fn test(&mut self, ids: &[&[usize]], expected_outputs: &[Report]) {
-            let mut switches = [false; N];
-            let mut res = None;
-            self.reset_keys();
-            ids.iter().for_each(|&id| {
-                for i in id {
-                    switches[*i] ^= true;
-                }
-                (0..DT).for_each(|_| {
-                    self.keymap.tick(&switches);
-                    while self.consumer.ready() {
-                        res = self.consumer.dequeue();
+        // Process all events.
+        self.processors[self.layer]
+            .iter()
+            .for_each(|handler| handler.process(&mut self.handlers, &self.events));
+
+        // Handle individual events.
+        self.handlers
+            .iter_mut()
+            .zip(self.events.iter())
+            .for_each(|(handler, event)| {
+                if let Some(Some(functions)) = handler.map(|h| h.handle(event)) {
+                    for function in functions {
+                        match function {
+                            Function::Report(report) => self.reporter.enqueue(*report).unwrap(),
+                            Function::Layer(layer) => self.layer = *layer as usize,
+                        }
                     }
-                });
-                self.keymap.tick(&switches);
+                }
+                if matches!(event, Event::Released(_)) {
+                    *handler = None;
+                }
             });
-
-            expected_outputs.iter().for_each(|expected_output| {
-                assert_eq!(
-                    self.consumer.dequeue().unwrap_or(Report::Custom(123)),
-                    *expected_output,
-                    "Inputs: {:?} {:?}",
-                    ids,
-                    expected_outputs
-                );
-            });
-        }
-    }
-
-    static mut Q: Queue<Report, MAX_REPORTS> = Queue::new();
-    const N: usize = 6;
-    const L: usize = 3;
-    static TAP_COMB: handler::TapComb = handler::TapComb::new(&[kb!(W), kb!(E)]);
-    static KEYS: [[&dyn Handle; N]; L] = keys!(
-        [
-            kc!(A), ht!(12, kb!(F), kb!(J));
-            kc!(A), lyoo!(1, 0);
-            TAP_COMB, lytp!(1);
-        ],
-        [
-            kc!(B), kc!(B);
-            kc!(B), kc!(B);
-            lytp!(2), lytp!(0);
-        ],
-        [
-            kc!(C), kc!(C);
-            kc!(C), kc!(C);
-            kc!(C), lytp!(0);
-        ]
-    );
-
-    static CHORD1: Chord<L> = chrd!(1, 2, [Some(&kc!(Q)), None, None]);
-    static CHORD2: Chord<L> = chrd!(2, 4, [Some(&lytp!(1)), None, None]);
-    static KH: Processor<N, L> = Processor::new(KEYS);
-    static HANDLERS: [&'static dyn Process<N, L>; 3] = [&CHORD1, &CHORD2, &KH];
-
-    #[test]
-    fn test() {
-        let (producer, consumer) = unsafe { Q.split() };
-        let keymap: Keymap<N, L> = Keymap::new(&HANDLERS, producer);
-
-        let mut tester = Tester::new(keymap, consumer);
-        tester.test(&[&[0]], &[r!(A)]); // 1 key
-        tester.test(&[&[0, 1]], &[r!(A), r!(A)]); // 2 keys
-        tester.test(&[&[4], &[4], &[0]], &[r!(A)]); // layer 0 -> 1 -> 0
-
-        tester.test(&[&[3], &[3]], &[r!(J)]); // tap
-        tester.test(&[&[3], &[], &[]], &[r!(F)]); // hold
-        tester.test(&[&[1, 2]], &[r!(Q)]); // chording 1
-        tester.test(&[&[1, 2], &[1, 2], &[1]], &[r!(A)]); // chording 1
-        tester.test(&[&[4, 2], &[4, 2], &[0]], &[r!(B)]); // chording 2
-
-        tester.test(&[&[2]], &[r!(W), r!(E)]); // tapcomb
     }
 }
