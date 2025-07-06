@@ -7,7 +7,6 @@ use crate::handler::Handle;
 use crate::processor::Process;
 use crate::report::Report;
 
-const MAX_REPORTS: usize = 128;
 const DT: u8 = 5;
 
 pub struct Keymap<const N: usize, const L: usize> {
@@ -16,25 +15,20 @@ pub struct Keymap<const N: usize, const L: usize> {
     events: [Event; N],
     handlers: [Option<&'static dyn Handle>; N],
     processors: &'static [&'static [&'static dyn Process<N>]; L],
-    reporter: Producer<'static, Report, MAX_REPORTS>,
 }
 
 impl<const N: usize, const L: usize> Keymap<N, L> {
-    pub fn new(
-        processors: &'static [&'static [&'static dyn Process<N>]; L],
-        reporter: Producer<'static, Report, MAX_REPORTS>,
-    ) -> Keymap<N, L> {
+    pub fn new(processors: &'static [&'static [&'static dyn Process<N>]; L]) -> Keymap<N, L> {
         Keymap {
             layer: 0,
             debouncers: [Debouncer::<DT>::new(); N],
             events: [Event::new(); N],
             handlers: [None; N],
             processors,
-            reporter,
         }
     }
 
-    pub fn tick(&mut self, switches: &[bool; N]) {
+    pub fn tick(&mut self, switches: &[bool; N]) -> [Option<Report>; N] {
         self.events
             .iter_mut()
             .zip(self.debouncers.iter_mut().zip(switches.iter()))
@@ -48,21 +42,24 @@ impl<const N: usize, const L: usize> Keymap<N, L> {
             .for_each(|handler| handler.process(&mut self.handlers, &self.events));
 
         // Handle individual events.
-        self.handlers
+        let mut reports: [Option<Report>; N] = [None; N];
+        reports
             .iter_mut()
-            .zip(self.events.iter())
-            .for_each(|(handler, event)| {
-                if let Some(Some(functions)) = handler.map(|h| h.handle(event)) {
-                    for function in functions {
+            .zip(self.handlers.iter_mut().zip(self.events.iter()))
+            .for_each(|(report, (handler, event))| {
+                if let Some(h) = handler {
+                    if let Some(function) = h.handle(event) {
                         match function {
-                            Function::Report(report) => self.reporter.enqueue(*report).unwrap(),
-                            Function::Layer(layer) => self.layer = *layer as usize,
+                            Function::Report(r) => *report = Some(r),
+                            Function::Layer(l) => self.layer = l as usize,
                         }
                     }
-                }
-                if matches!(event, Event::Released(_)) {
-                    *handler = None;
+                    if matches!(event, Event::Released(_)) {
+                        *handler = None;
+                    }
                 }
             });
+
+        reports
     }
 }

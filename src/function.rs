@@ -8,7 +8,7 @@ pub enum Function {
 
 // Keyboard Report
 #[macro_export]
-macro_rules! kb {
+macro_rules! k {
     ($x: tt) => {
         $crate::function::Function::Report($crate::report::Report::Keyboard(
             $crate::report::Keyboard::$x,
@@ -18,7 +18,7 @@ macro_rules! kb {
 
 // Consumer Report
 #[macro_export]
-macro_rules! cu {
+macro_rules! c {
     ($x: tt) => {
         $crate::function::Function::Report($crate::report::Report::Consumer(
             $crate::report::Consumer::$x,
@@ -28,7 +28,7 @@ macro_rules! cu {
 
 // Desktop Report
 #[macro_export]
-macro_rules! dk {
+macro_rules! d {
     ($x: tt) => {
         $crate::function::Function::Report($crate::report::Report::Desktop(
             $crate::report::Desktop::$x,
@@ -38,7 +38,7 @@ macro_rules! dk {
 
 // Layer Change
 #[macro_export]
-macro_rules! ly {
+macro_rules! l {
     ($x: tt) => {{
         $crate::function::Function::Layer($x)
     }};

@@ -15,10 +15,10 @@ impl HoldTap {
 }
 
 impl Handle for HoldTap {
-    fn handle(&self, event: &Event) -> Option<&[Function]> {
+    fn handle(&self, event: &Event) -> Option<Function> {
         match event {
-            Event::Pressed(i) if *i == self.thold => Some(core::slice::from_ref(&self.hold)),
-            Event::Releasing(i) if *i < self.thold => Some(core::slice::from_ref(&self.tap)),
+            Event::Pressed(i) if *i == self.thold => Some(self.hold),
+            Event::Releasing(i) if *i < self.thold => Some(self.tap),
             _ => None,
         }
     }
