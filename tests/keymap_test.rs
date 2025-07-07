@@ -2,15 +2,10 @@ mod statics;
 use crate::statics::*;
 
 use rukeeb::keymap::Keymap;
-use rukeeb::report::{Keyboard, Report};
+use rukeeb::report::Report;
+use rukeeb::rpt as r;
 
 const DT: usize = 5;
-
-macro_rules! r {
-    ($x:tt) => {
-        Report::Keyboard(Keyboard::$x)
-    };
-}
 
 struct Tester<const N: usize, const L: usize> {
     keymap: Keymap<N, L>,
@@ -23,7 +18,7 @@ impl<const N: usize, const L: usize> Tester<N, L> {
 
     pub fn test(&mut self, ids: &[&[usize]], expected_outputs: &[Report]) {
         let mut switches = [false; N];
-        let mut res = [None; N];
+        let mut res: Vec<Report> = vec![];
 
         (0..128).for_each(|_| {
             self.keymap.tick(&[false; N]);
@@ -34,10 +29,15 @@ impl<const N: usize, const L: usize> Tester<N, L> {
                 switches[*i] ^= true;
             }
             (0..DT + 1).for_each(|_| {
-                res = self.keymap.tick(&switches);
+                let reports = self.keymap.tick(&switches);
+                res = reports
+                    .into_iter()
+                    .filter_map(|s| s)
+                    .flat_map(|s| s.iter().copied())
+                    .collect::<Vec<_>>();
             });
         });
-        let res = res.into_iter().filter_map(|r| r).collect::<Vec<_>>();
+
         assert_eq!(
             res, expected_outputs,
             "Inputs: {:?} {:?}",
@@ -60,5 +60,7 @@ fn test() {
     tester.test(&[&[1, 2]], &[r!(Q), r!(Q)]); // chording 1
     tester.test(&[&[1, 2], &[1, 2], &[1]], &[r!(A)]); // chording 1
     tester.test(&[&[2, 4], &[2, 4], &[0]], &[r!(B)]); // chording 2
-    tester.test(&[&[2, 4], &[2, 4], &[0]], &[r!(A)]); // chording 3
+
+    tester.test(&[&[2], &[2], &[3]], &[r!(A), r!(B), r!(C)]);
+    tester.test(&[&[5], &[5], &[0]], &[r!(A)]);
 }

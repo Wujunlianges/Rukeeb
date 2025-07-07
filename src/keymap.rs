@@ -28,7 +28,7 @@ impl<const N: usize, const L: usize> Keymap<N, L> {
         }
     }
 
-    pub fn tick(&mut self, switches: &[bool; N]) -> [Option<Report>; N] {
+    pub fn tick(&mut self, switches: &[bool; N]) -> [Option<&[Report]>; N] {
         self.events
             .iter_mut()
             .zip(self.debouncers.iter_mut().zip(switches.iter()))
@@ -42,7 +42,7 @@ impl<const N: usize, const L: usize> Keymap<N, L> {
             .for_each(|handler| handler.process(&mut self.handlers, &self.events));
 
         // Handle individual events.
-        let mut reports: [Option<Report>; N] = [None; N];
+        let mut reports: [Option<&[Report]>; N] = [None; N];
         reports
             .iter_mut()
             .zip(self.handlers.iter_mut().zip(self.events.iter()))

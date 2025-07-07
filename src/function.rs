@@ -2,44 +2,24 @@ use crate::report::Report;
 
 #[derive(Clone, Copy)]
 pub enum Function {
-    Report(Report),
+    Report(&'static [Report]),
     Layer(u8),
 }
 
-// Keyboard Report
+// Keyboard
 #[macro_export]
 macro_rules! k {
-    ($x: tt) => {
-        $crate::function::Function::Report($crate::report::Report::Keyboard(
-            $crate::report::Keyboard::$x,
-        ))
+    ($($x: tt),* $(,)?) => {
+        $crate::function::Function::Report(
+            &[$($crate::rpt!($x)),*]
+        )
     };
 }
 
-// Consumer Report
-#[macro_export]
-macro_rules! c {
-    ($x: tt) => {
-        $crate::function::Function::Report($crate::report::Report::Consumer(
-            $crate::report::Consumer::$x,
-        ))
-    };
-}
-
-// Desktop Report
-#[macro_export]
-macro_rules! d {
-    ($x: tt) => {
-        $crate::function::Function::Report($crate::report::Report::Desktop(
-            $crate::report::Desktop::$x,
-        ))
-    };
-}
-
-// Layer Change
+// Layer
 #[macro_export]
 macro_rules! l {
-    ($x: tt) => {{
+    ($x: tt) => {
         $crate::function::Function::Layer($x)
-    }};
+    };
 }
