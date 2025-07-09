@@ -86,9 +86,11 @@ macro_rules! rpt {
     (MNXT) => {$crate::rpt!(@co_rpt TrackingIncrement)}; (MPRV) => {$crate::rpt!(@co_rpt TrackingDecrement)}; (MSTP) => {$crate::rpt!(@co_rpt Stop)};
     (MPLY) => {$crate::rpt!(@co_rpt PlayPause)};
 
-    // Custom (if uncommented)
-    // ($n: literal) => {
-    //     const _ : () = assert!($n >= 0 && $n <= 255, "Literal must be between 0 and 255");
-    //     $crate::rpt!(@cu_rpt $n)
-    // };
+    // Custom
+    ($n: literal) => {
+        {
+            const _ : () = assert!($n >= 10 && $n <= 255, "Literal must be between 10 and 255");
+            $crate::rpt!(@cu_rpt $n)
+        }
+    };
 }
