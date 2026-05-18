@@ -1,15 +1,15 @@
-use crate::event::Event;
+use crate::event::{Event, Timestamp};
 use crate::function::Function;
 use crate::handler::Handle;
 
 pub struct HoldTap {
-    thold: u8,
+    thold: Timestamp,
     hold: Function,
     tap: Function,
 }
 
 impl HoldTap {
-    pub const fn new(thold: u8, hold: Function, tap: Function) -> HoldTap {
+    pub const fn new(thold: Timestamp, hold: Function, tap: Function) -> HoldTap {
         HoldTap { thold, hold, tap }
     }
 }

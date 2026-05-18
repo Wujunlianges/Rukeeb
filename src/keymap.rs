@@ -1,13 +1,13 @@
 use heapless::spsc::Producer;
 
 use crate::debouncer::{Debounce, Debouncer};
-use crate::event::Event;
+use crate::event::{Event, Timestamp};
 use crate::function::Function;
 use crate::handler::Handle;
 use crate::processor::Process;
 use crate::report::Report;
 
-const DT: u8 = 5;
+const DT: Timestamp = 5;
 
 pub struct Keymap<const N: usize, const L: usize> {
     layer: usize,

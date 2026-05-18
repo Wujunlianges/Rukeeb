@@ -85,9 +85,7 @@ macro_rules! kt {
 #[macro_export]
 macro_rules! lt {
     ($x:tt) => {
-        $crate::handler::Tap::new(
-            $crate::function::Function::Layer($x)
-        )
+        $crate::handler::Tap::new($crate::function::Function::Layer($x))
     };
 }
 
@@ -97,7 +95,7 @@ macro_rules! lo {
     ($x0:tt, $x1:tt) => {
         $crate::handler::OnOff::new(
             $crate::function::Function::Layer($x0),
-            $crate::function::Function::Layer($x1)
+            $crate::function::Function::Layer($x1),
         )
     };
 }
