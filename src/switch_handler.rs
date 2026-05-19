@@ -1,10 +1,10 @@
-use crate::event::Event;
 use crate::function::Function;
+use crate::switch::SwitchEvent;
 
 pub mod holdtap;
 
-pub trait Handle: Sync {
-    fn handle(&self, event: &Event) -> Option<Function>;
+pub trait SwitchHandle: Sync {
+    fn handle(&self, switch_event: &SwitchEvent) -> Option<Function>;
 }
 
 pub struct Hold(Function);
@@ -17,10 +17,10 @@ impl Hold {
     }
 }
 
-impl Handle for Hold {
-    fn handle(&self, event: &Event) -> Option<Function> {
-        match event {
-            Event::Pressing(_) | Event::Pressed(_) => Some(self.0),
+impl SwitchHandle for Hold {
+    fn handle(&self, switch_event: &SwitchEvent) -> Option<Function> {
+        match switch_event {
+            SwitchEvent::Pressing(_) | SwitchEvent::Pressed(_) => Some(self.0),
             _ => None,
         }
     }
@@ -32,10 +32,10 @@ impl Tap {
     }
 }
 
-impl Handle for Tap {
-    fn handle(&self, event: &Event) -> Option<Function> {
-        match event {
-            Event::Pressing(_) => Some(self.0),
+impl SwitchHandle for Tap {
+    fn handle(&self, switch_event: &SwitchEvent) -> Option<Function> {
+        match switch_event {
+            SwitchEvent::Pressing(_) => Some(self.0),
             _ => None,
         }
     }
@@ -47,11 +47,11 @@ impl OnOff {
     }
 }
 
-impl Handle for OnOff {
-    fn handle(&self, event: &Event) -> Option<Function> {
-        match event {
-            Event::Pressing(_) => Some(self.0),
-            Event::Releasing(_) => Some(self.1),
+impl SwitchHandle for OnOff {
+    fn handle(&self, switch_event: &SwitchEvent) -> Option<Function> {
+        match switch_event {
+            SwitchEvent::Pressing(_) => Some(self.0),
+            SwitchEvent::Releasing(_) => Some(self.1),
             _ => None,
         }
     }
@@ -61,7 +61,7 @@ impl Handle for OnOff {
 #[macro_export]
 macro_rules! kh {
     ($($x: tt),* $(,)?) => {
-        $crate::handler::Hold::new(
+        $crate::switch_handler::Hold::new(
             $crate::function::Function::Report(
                 &[$(rpt!($x)),*]
             )
@@ -73,7 +73,7 @@ macro_rules! kh {
 #[macro_export]
 macro_rules! kt {
     ($($x: tt),* $(,)?) => {
-        $crate::handler::Tap::new(
+        $crate::switch_handler::Tap::new(
             $crate::function::Function::Report(
                 &[$(rpt!($x)),*]
             )
@@ -85,7 +85,7 @@ macro_rules! kt {
 #[macro_export]
 macro_rules! lt {
     ($x:tt) => {
-        $crate::handler::Tap::new($crate::function::Function::Layer($x))
+        $crate::switch_handler::Tap::new($crate::function::Function::Layer($x))
     };
 }
 
@@ -93,7 +93,7 @@ macro_rules! lt {
 #[macro_export]
 macro_rules! lo {
     ($x0:tt, $x1:tt) => {
-        $crate::handler::OnOff::new(
+        $crate::switch_handler::OnOff::new(
             $crate::function::Function::Layer($x0),
             $crate::function::Function::Layer($x1),
         )

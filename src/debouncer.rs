@@ -1,32 +1,35 @@
-use crate::event::{Event, State, Timestamp};
+use crate::switch::{Switch, SwitchEvent, SwitchState, Timestamp};
 
-pub trait Debounce {
-    fn debounce(&mut self, switch: bool) -> Event;
-}
-
-#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Debouncer<const DT: Timestamp> {
-    switch: bool,
+    signal: bool,
     duration: Timestamp,
-    state: State,
+    state: SwitchState,
 }
 
 impl<const DT: Timestamp> Debouncer<DT> {
     pub fn new() -> Debouncer<DT> {
         Debouncer {
-            ..Default::default()
+            signal: false,
+            duration: 0,
+            state: SwitchState::Released(0),
         }
+    }
+
+    pub fn reset(&mut self) {
+        self.signal = false;
+        self.duration = 0;
     }
 }
 
-impl<const DT: Timestamp> Debounce for Debouncer<DT> {
-    fn debounce(&mut self, switch: bool) -> Event {
-        self.duration = match self.switch == switch {
+impl<const DT: Timestamp> Switch for Debouncer<DT> {
+    fn update(&mut self, signal: bool) -> SwitchEvent {
+        self.duration = match self.signal == signal {
             true => self.duration.saturating_add(1),
             false => 0,
         };
-        self.switch = switch;
-        match (self.duration >= DT, self.switch) {
+        self.signal = signal;
+        match (self.duration >= DT, self.signal) {
             (true, true) => self.state.press(),
             (true, false) => self.state.release(),
             (false, _) => self.state.proceed(),
@@ -43,20 +46,20 @@ mod test {
         let mut debouncer = Debouncer::<5>::new();
 
         (1..=10).for_each(|i| {
-            assert_eq!(debouncer.debounce(false), Event::Released(i));
+            assert_eq!(debouncer.update(false), SwitchEvent::Released(i));
         });
 
         (1..=5).for_each(|i| {
-            assert_eq!(debouncer.debounce(true), Event::Released(10 + i));
+            assert_eq!(debouncer.update(true), SwitchEvent::Released(10 + i));
         });
 
-        assert_eq!(debouncer.debounce(true), Event::Pressing(15));
+        assert_eq!(debouncer.update(true), SwitchEvent::Pressing(15));
 
         (1..=5).for_each(|i| {
-            assert_eq!(debouncer.debounce(false), Event::Pressed(i));
+            assert_eq!(debouncer.update(false), SwitchEvent::Pressed(i));
         });
 
-        assert_eq!(debouncer.debounce(false), Event::Releasing(5));
+        assert_eq!(debouncer.update(false), SwitchEvent::Releasing(5));
     }
 
     #[test]
@@ -64,12 +67,12 @@ mod test {
         let mut debouncer = Debouncer::<5>::new();
 
         (1..=10).for_each(|i| {
-            debouncer.debounce(false);
-            debouncer.debounce(true);
-            debouncer.debounce(true);
-            debouncer.debounce(true);
-            debouncer.debounce(true);
-            assert_eq!(debouncer.debounce(true), Event::Released(6 * i));
+            debouncer.update(false);
+            debouncer.update(true);
+            debouncer.update(true);
+            debouncer.update(true);
+            debouncer.update(true);
+            assert_eq!(debouncer.update(true), SwitchEvent::Released(6 * i));
         });
     }
 
@@ -77,9 +80,9 @@ mod test {
     fn no_debounce() {
         let mut debouncer = Debouncer::<0>::new();
 
-        assert_eq!(debouncer.debounce(true), Event::Pressing(0));
+        assert_eq!(debouncer.update(true), SwitchEvent::Pressing(0));
         (1..=10).for_each(|i| {
-            assert_eq!(debouncer.debounce(true), Event::Pressed(i));
+            assert_eq!(debouncer.update(true), SwitchEvent::Pressed(i));
         });
     }
 }

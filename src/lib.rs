@@ -3,9 +3,10 @@
 #![no_std]
 
 pub mod debouncer;
-pub mod event;
 pub mod function;
-pub mod handler;
+pub mod switch_handler;
+pub mod key;
 pub mod keymap;
-pub mod processor;
+pub mod key_handler;
 pub mod report;
+pub mod switch;

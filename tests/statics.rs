@@ -1,12 +1,11 @@
-use rukeeb::processor::chord::Chord;
-use rukeeb::processor::{Process, Processor};
+use rukeeb::key_handler::chord::Chord;
+use rukeeb::key_handler::{Process, Processor};
 use rukeeb::*;
 
 pub const N: usize = 6;
-pub const L: usize = 3;
 
 // layer 0
-static HT: handler::holdtap::HoldTap = ht!(12, k!(F), k!(J));
+static HT: switch_handler::holdtap::HoldTap = ht!(12, k!(F), k!(J));
 static PRO0: Processor<N> = processor!([
     kh!(A), HT;
     kh!(A), lo!(1, 0);

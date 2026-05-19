@@ -7,12 +7,12 @@ use rukeeb::rpt as r;
 
 const DT: usize = 5;
 
-struct Tester<const N: usize, const L: usize> {
-    keymap: Keymap<N, L>,
+struct Tester<const N: usize> {
+    keymap: Keymap<N>,
 }
 
-impl<const N: usize, const L: usize> Tester<N, L> {
-    pub fn new(keymap: Keymap<N, L>) -> Tester<N, L> {
+impl<const N: usize> Tester<N> {
+    pub fn new(keymap: Keymap<N>) -> Tester<N> {
         Tester { keymap }
     }
 
@@ -48,7 +48,7 @@ impl<const N: usize, const L: usize> Tester<N, L> {
 
 #[test]
 fn test() {
-    let keymap: Keymap<N, L> = Keymap::new(&HANDLERS);
+    let keymap: Keymap<N> = Keymap::new(&HANDLERS);
 
     let mut tester = Tester::new(keymap);
     tester.test(&[&[0]], &[r!(A)]); // 1 key

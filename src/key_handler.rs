@@ -1,29 +1,37 @@
-use crate::event::Event;
-use crate::handler::Handle;
+use crate::switch::SwitchEvent;
+use crate::switch_handler::SwitchHandle;
 
 pub mod chord;
 
 pub trait Process<const N: usize>: Sync {
-    fn process(&self, handlers: &mut [Option<&'static dyn Handle>; N], events: &[Event; N]);
+    fn feed_handlers(
+        &self,
+        handlers: &mut [Option<&'static dyn SwitchHandle>; N],
+        events: &[SwitchEvent; N],
+    );
 }
 
 pub struct Processor<const N: usize> {
-    keys: [&'static dyn Handle; N],
+    keys: [&'static dyn SwitchHandle; N],
 }
 
 impl<const N: usize> Processor<N> {
-    pub const fn new(keys: [&'static dyn Handle; N]) -> Processor<N> {
+    pub const fn new(keys: [&'static dyn SwitchHandle; N]) -> Processor<N> {
         Processor { keys }
     }
 }
 
 impl<const N: usize> Process<N> for Processor<N> {
-    fn process(&self, handlers: &mut [Option<&'static dyn Handle>; N], events: &[Event; N]) {
+    fn feed_handlers(
+        &self,
+        handlers: &mut [Option<&'static dyn SwitchHandle>; N],
+        events: &[SwitchEvent; N],
+    ) {
         handlers
             .iter_mut()
             .zip(events.iter().zip(self.keys.iter()))
-            .for_each(|(handler, (event, key))| {
-                if matches!(event, Event::Pressing(_)) && handler.is_none() {
+            .for_each(|(handler, (switch_event, key))| {
+                if matches!(switch_event, SwitchEvent::Pressing(_)) && handler.is_none() {
                     *handler = Some(*key);
                 }
             });
@@ -52,6 +60,6 @@ macro_rules! keys {
 #[macro_export]
 macro_rules! processor {
     ([$($($x:expr),+ $(,)?);* $(;)?]) => {
-        $crate::processor::Processor::new($crate::keys![$($($x,)*;)*])
+        $crate::key_handler::Processor::new($crate::keys![$($($x,)*;)*])
     };
 }
