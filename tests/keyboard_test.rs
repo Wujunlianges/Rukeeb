@@ -130,9 +130,9 @@ fn test() {
         (16, &[], &[r!(B)]),
         (17, &[0, 2], &[r!(B)]), // 0 deactivates and 2 activates at 17 + DT
         (23, &[2, 3], &[]),      // 2 deactivates and 3 activates at 22 + DT | level 2
-        (28, &[], &[r!(A), r!(B), r!(C)]),
-        (29, &[3, 5], &[r!(A), r!(B), r!(C)]), // 3 deactivates and 5 activates at 29 + DT
-        (35, &[0, 5], &[]),                    // 0 activates and 5 deactivates at 35 + DT
+        (28, &[], &[r!(C)]),     // todo: this should be a multiple
+        (29, &[3, 5], &[r!(C)]), // 3 deactivates and 5 activates at 29 + DT
+        (35, &[0, 5], &[]),      // 0 activates and 5 deactivates at 35 + DT
         (40, &[], &[r!(A)]),
         (41, &[0], &[r!(A)]), // 0 deactivates at 41 + DT
         (46, &[], &[]),

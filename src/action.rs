@@ -1,18 +1,16 @@
 use crate::report::Report;
 
 #[derive(Clone, Copy)]
-pub enum Action<'a> {
-    Report(&'a [Report]), // todo: make it Report only.
+pub enum Action {
+    Report(Report),
     Layer(u8),
 }
 
 // Keyboard
 #[macro_export]
 macro_rules! k {
-    ($($x: tt),* $(,)?) => {
-        $crate::action::Action::Report(
-            &[$($crate::rpt!($x)),*]
-        )
+    ($x: tt) => {
+        $crate::action::Action::Report($crate::rpt!($x))
     };
 }
 

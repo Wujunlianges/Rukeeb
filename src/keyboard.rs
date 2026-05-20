@@ -1,5 +1,4 @@
 use heapless::spsc::Producer;
-use heapless::vec::Vec;
 
 use crate::action::Action;
 use crate::action_handler::ActionHandler;

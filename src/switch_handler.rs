@@ -5,21 +5,21 @@ mod holdtap;
 pub use holdtap::HoldTap;
 
 pub trait HandleSwitchEvent: Sync {
-    fn handle(&self, switch_event: &SwitchEvent) -> Option<Action<'_>>;
+    fn handle(&self, switch_event: &SwitchEvent) -> Option<Action>;
 }
 
-pub struct Hold<'a>(Action<'a>);
-pub struct Tap<'a>(Action<'a>);
-pub struct OnOff<'a>(Action<'a>, Action<'a>);
+pub struct Hold(Action);
+pub struct Tap(Action);
+pub struct OnOff(Action, Action);
 
-impl<'a> Hold<'a> {
+impl Hold {
     pub const fn new(f: Action) -> Hold {
         Hold(f)
     }
 }
 
-impl<'a> HandleSwitchEvent for Hold<'a> {
-    fn handle(&self, switch_event: &SwitchEvent) -> Option<Action<'a>> {
+impl HandleSwitchEvent for Hold {
+    fn handle(&self, switch_event: &SwitchEvent) -> Option<Action> {
         match switch_event {
             SwitchEvent::Pressing(_) | SwitchEvent::Pressed(_) => Some(self.0),
             _ => None,
@@ -27,14 +27,14 @@ impl<'a> HandleSwitchEvent for Hold<'a> {
     }
 }
 
-impl<'a> Tap<'a> {
+impl Tap {
     pub const fn new(f: Action) -> Tap {
         Tap(f)
     }
 }
 
-impl<'a> HandleSwitchEvent for Tap<'a> {
-    fn handle(&self, switch_event: &SwitchEvent) -> Option<Action<'a>> {
+impl HandleSwitchEvent for Tap {
+    fn handle(&self, switch_event: &SwitchEvent) -> Option<Action> {
         match switch_event {
             SwitchEvent::Pressing(_) => Some(self.0),
             _ => None,
@@ -42,14 +42,14 @@ impl<'a> HandleSwitchEvent for Tap<'a> {
     }
 }
 
-impl<'a> OnOff<'a> {
-    pub const fn new(f0: Action<'a>, f1: Action<'a>) -> OnOff<'a> {
+impl OnOff {
+    pub const fn new(f0: Action, f1: Action) -> OnOff {
         OnOff(f0, f1)
     }
 }
 
-impl<'a> HandleSwitchEvent for OnOff<'a> {
-    fn handle(&self, switch_event: &SwitchEvent) -> Option<Action<'a>> {
+impl HandleSwitchEvent for OnOff {
+    fn handle(&self, switch_event: &SwitchEvent) -> Option<Action> {
         match switch_event {
             SwitchEvent::Pressing(_) => Some(self.0),
             SwitchEvent::Releasing(_) => Some(self.1),
@@ -61,24 +61,16 @@ impl<'a> HandleSwitchEvent for OnOff<'a> {
 // Keyboard Hold
 #[macro_export]
 macro_rules! kh {
-    ($($x: tt),* $(,)?) => {
-        $crate::switch_handler::Hold::new(
-            $crate::action::Action::Report(
-                &[$(rpt!($x)),*]
-            )
-        )
+    ($x: tt) => {
+        $crate::switch_handler::Hold::new($crate::action::Action::Report($crate::rpt!($x)))
     };
 }
 
 // Keyboard Tap
 #[macro_export]
 macro_rules! kt {
-    ($($x: tt),* $(,)?) => {
-        $crate::switch_handler::Tap::new(
-            $crate::action::Action::Report(
-                &[$(rpt!($x)),*]
-            )
-        )
+    ($x: tt) => {
+        $crate::switch_handler::Tap::new($crate::action::Action::Report($crate::rpt!($x)))
     };
 }
 

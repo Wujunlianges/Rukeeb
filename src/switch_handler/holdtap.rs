@@ -2,20 +2,20 @@ use crate::action::Action;
 use crate::switch::{SwitchEvent, Tick};
 use crate::switch_handler::HandleSwitchEvent;
 
-pub struct HoldTap<'a> {
+pub struct HoldTap {
     thold: Tick,
-    hold: Action<'a>,
-    tap: Action<'a>,
+    hold: Action,
+    tap: Action,
 }
 
-impl<'a> HoldTap<'a> {
-    pub const fn new(thold: Tick, hold: Action<'a>, tap: Action<'a>) -> HoldTap<'a> {
+impl HoldTap {
+    pub const fn new(thold: Tick, hold: Action, tap: Action) -> HoldTap {
         HoldTap { thold, hold, tap }
     }
 }
 
-impl<'a> HandleSwitchEvent for HoldTap<'a> {
-    fn handle(&self, switch_event: &SwitchEvent) -> Option<Action<'a>> {
+impl HandleSwitchEvent for HoldTap {
+    fn handle(&self, switch_event: &SwitchEvent) -> Option<Action> {
         match switch_event {
             SwitchEvent::Pressed(i) if *i == self.thold => Some(self.hold),
             SwitchEvent::Releasing(i) if *i < self.thold => Some(self.tap),

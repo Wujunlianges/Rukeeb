@@ -21,9 +21,7 @@ impl<'b> ActionHandler<'b> {
 impl<'b> HandleAction for ActionHandler<'b> {
     fn handle(&mut self, action: Action) -> Result<(), Report> {
         match action {
-            Action::Report(report) => report
-                .iter()
-                .try_for_each(|r| self.producer.enqueue(r.clone()))?,
+            Action::Report(report) => self.producer.enqueue(report)?,
             Action::Layer(layer) => self.layer = layer as usize,
         }
         Ok(())

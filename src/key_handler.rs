@@ -1,5 +1,3 @@
-use heapless::Vec;
-
 use crate::action::Action;
 use crate::action_handler::HandleAction;
 use crate::key::KeyEvent;

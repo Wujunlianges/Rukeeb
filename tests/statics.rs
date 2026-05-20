@@ -17,7 +17,7 @@ static KEYMAP: Keymap<N> = keymap!(
             lt!(2), lt!(0);
         ],
         [
-            kh!(C), kh!(A,B,C);
+            kh!(C), kh!(C);
             kh!(C), kh!(C);
             kh!(C), lt!(0);
         ]
