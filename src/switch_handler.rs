@@ -1,7 +1,8 @@
 use crate::function::Function;
 use crate::switch::SwitchEvent;
 
-pub mod holdtap;
+mod holdtap;
+pub use holdtap::HoldTap;
 
 pub trait SwitchHandle: Sync {
     fn handle(&self, switch_event: &SwitchEvent) -> Option<Function>;

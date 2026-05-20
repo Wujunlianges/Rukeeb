@@ -1,65 +1,80 @@
-use crate::switch::SwitchEvent;
+use heapless::Vec;
+
+use crate::function::Function;
+use crate::key::KeyEvent;
 use crate::switch_handler::SwitchHandle;
 
-pub mod chord;
+mod chord;
+pub use chord::Chord;
 
-pub trait Process<const N: usize>: Sync {
-    fn feed_handlers(
+pub trait KeyHandle<const N: usize>: Sync {
+    fn handle(
         &self,
-        handlers: &mut [Option<&'static dyn SwitchHandle>; N],
-        events: &[SwitchEvent; N],
-    );
+        key_events: &mut [Option<KeyEvent>; N],
+        functions: &mut Vec<Function, N>,
+    ) -> Result<(), Function>;
 }
 
-pub struct Processor<const N: usize> {
-    keys: [&'static dyn SwitchHandle; N],
+pub struct Keymap<const N: usize> {
+    layers: &'static [&'static [&'static dyn SwitchHandle; N]],
 }
 
-impl<const N: usize> Processor<N> {
-    pub const fn new(keys: [&'static dyn SwitchHandle; N]) -> Processor<N> {
-        Processor { keys }
+impl<const N: usize> Keymap<N> {
+    pub const fn new(layers: &'static [&'static [&'static dyn SwitchHandle; N]]) -> Keymap<N> {
+        Keymap { layers }
     }
 }
 
-impl<const N: usize> Process<N> for Processor<N> {
-    fn feed_handlers(
+impl<const N: usize> KeyHandle<N> for Keymap<N> {
+    fn handle(
         &self,
-        handlers: &mut [Option<&'static dyn SwitchHandle>; N],
-        events: &[SwitchEvent; N],
-    ) {
-        handlers
+        key_events: &mut [Option<KeyEvent>; N],
+        functions: &mut Vec<Function, N>,
+    ) -> Result<(), Function> {
+        key_events
             .iter_mut()
-            .zip(events.iter().zip(self.keys.iter()))
-            .for_each(|(handler, (switch_event, key))| {
-                if matches!(switch_event, SwitchEvent::Pressing(_)) && handler.is_none() {
-                    *handler = Some(*key);
+            .enumerate()
+            .try_for_each(|(idx, key_event)| {
+                if let Some((key_layer, switch_event)) = key_event {
+                    if let Some(function) = self.layers[*key_layer][idx].handle(switch_event) {
+                        functions.push(function)?;
+                    }
+                    *key_event = None;
                 }
-            });
+                Ok(())
+            })
     }
 }
 
 #[macro_export]
-macro_rules! keys {
+macro_rules! layer {
     ($($($x:expr),+ $(,)?);* $(;)?) => {
-        $crate::keys!(@layer [] [$($($x,)*;)*])
+        $crate::layer!(@munch [] [$($($x,)*;)*])
     };
-    (@layer [] [$($x0:expr, $($x:expr,)*;)*]) => {
-        $crate::keys!(@layer [$($x0,)*] [$($($x,)*;)*])
+    (@munch [] [$($x0:expr, $($x:expr,)*;)*]) => {
+        $crate::layer!(@munch [$($x0,)*] [$($($x,)*;)*])
     };
-    (@layer [$($x0:expr,)*] [$($x1:expr, $($x:expr,)*;)*]) => {
-        $crate::keys!(@layer [$($x0,)*$($x1,)*] [$($($x,)*;)*])
+    (@munch [$($x0:expr,)*] [$($x1:expr, $($x:expr,)*;)*]) => {
+        $crate::layer!(@munch [$($x0,)*$($x1,)*] [$($($x,)*;)*])
     };
-    (@layer [$($x:expr,)*] [$(;)*]) => {
-        $crate::keys!(@key [$($x,)*])
+    (@munch [$($x:expr,)*] [$(;)*]) => {
+        $crate::layer!(@finish [$($x,)*])
     };
-    (@key [$($x:expr,)*]) => {
+    (@finish [$($x:expr,)*]) => {
         [$(&$x,)*]
     };
 }
 
 #[macro_export]
-macro_rules! processor {
-    ([$($($x:expr),+ $(,)?);* $(;)?]) => {
-        $crate::key_handler::Processor::new($crate::keys![$($($x,)*;)*])
+macro_rules! layers {
+    ($([$($($x:expr),+ $(,)?);* $(;)?]),* $(,)?) => {
+        [$(&$crate::layer!($($($x),+;)*)),*]
+    };
+}
+
+#[macro_export]
+macro_rules! keymap {
+    ([$([$($($x:expr),+ $(,)?);* $(;)?]),* $(,)?]) => {
+        $crate::key_handler::Keymap::new(&$crate::layers![$([$($($x),+);*]),*])
     };
 }

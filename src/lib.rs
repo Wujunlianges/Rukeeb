@@ -2,11 +2,13 @@
 #![allow(unused_macros)]
 #![no_std]
 
+extern crate alloc;
+
 pub mod debouncer;
 pub mod function;
-pub mod switch_handler;
 pub mod key;
-pub mod keymap;
 pub mod key_handler;
+pub mod keyboard;
 pub mod report;
 pub mod switch;
+pub mod switch_handler;

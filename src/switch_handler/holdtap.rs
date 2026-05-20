@@ -27,6 +27,6 @@ impl SwitchHandle for HoldTap {
 #[macro_export]
 macro_rules! ht {
     ($thold:literal, $hold:expr, $tap: expr) => {
-        $crate::switch_handler::holdtap::HoldTap::new($thold, $hold, $tap)
+        $crate::switch_handler::HoldTap::new($thold, $hold, $tap)
     };
 }
