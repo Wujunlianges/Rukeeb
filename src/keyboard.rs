@@ -6,23 +6,27 @@ use crate::function::Function;
 use crate::key::KeyEvent;
 use crate::key_handler::{KeyHandle, Keymap};
 use crate::report::Report;
-use crate::switch::{Switch, SwitchEvent, Timestamp};
+use crate::switch::{Switch, SwitchEvent, Tick};
 use crate::switch_handler::SwitchHandle;
 
-const DT: Timestamp = 5;
+const DT: Tick = 5;
 
-pub struct Keyboard<const N: usize> {
+pub struct Keyboard<'a: 'b, 'b, const N: usize> {
     layer: usize,
     debouncers: [Debouncer<DT>; N],
     switch_events: [SwitchEvent; N],
     key_layers: [usize; N],
     key_events: [Option<KeyEvent>; N],
-    functions: Vec<Function, N>,
-    key_handlers: &'static [&'static dyn KeyHandle<N>],
+    functions: Vec<Function<'a>, N>,
+    key_handlers: &'a [&'a dyn KeyHandle<'a, N>],
+    producer: Producer<'b, Report>,
 }
 
-impl<const N: usize> Keyboard<N> {
-    pub fn new(key_handlers: &'static [&'static dyn KeyHandle<N>]) -> Keyboard<N> {
+impl<'a: 'b, 'b, const N: usize> Keyboard<'a, 'b, N> {
+    pub fn new(
+        key_handlers: &'a [&'a dyn KeyHandle<'a, N>],
+        producer: Producer<'b, Report>,
+    ) -> Keyboard<'a, 'b, N> {
         Keyboard {
             layer: 0,
             debouncers: [Debouncer::<DT>::new(); N],
@@ -31,10 +35,11 @@ impl<const N: usize> Keyboard<N> {
             key_events: [None; N],
             functions: Vec::new(),
             key_handlers,
+            producer,
         }
     }
 
-    pub fn tick(&mut self, signals: &[bool; N]) -> Vec<Report, N> {
+    pub fn tick(&mut self, signals: &[bool; N]) -> Result<(), Report> {
         self.switch_events
             .iter_mut()
             .zip(self.debouncers.iter_mut().zip(signals.iter()))
@@ -64,7 +69,15 @@ impl<const N: usize> Keyboard<N> {
             Function::Layer(n_layer) => self.layer = *n_layer as usize,
         });
 
-        self.functions.clear();
-        reports // todo: is there a better way to return? Maybe heapless::spsc::Producer?
+        while let Some(function) = self.functions.pop() {
+            match function {
+                Function::Report(report) => report
+                    .iter()
+                    .try_for_each(|r| self.producer.enqueue(r.clone()))?,
+                Function::Layer(n_layer) => self.layer = n_layer as usize,
+            }
+        }
+
+        Ok(())
     }
 }

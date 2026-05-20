@@ -1,21 +1,21 @@
 use crate::function::Function;
-use crate::switch::{SwitchEvent, Timestamp};
+use crate::switch::{SwitchEvent, Tick};
 use crate::switch_handler::SwitchHandle;
 
-pub struct HoldTap {
-    thold: Timestamp,
-    hold: Function,
-    tap: Function,
+pub struct HoldTap<'a> {
+    thold: Tick,
+    hold: Function<'a>,
+    tap: Function<'a>,
 }
 
-impl HoldTap {
-    pub const fn new(thold: Timestamp, hold: Function, tap: Function) -> HoldTap {
+impl<'a> HoldTap<'a> {
+    pub const fn new(thold: Tick, hold: Function<'a>, tap: Function<'a>) -> HoldTap<'a> {
         HoldTap { thold, hold, tap }
     }
 }
 
-impl SwitchHandle for HoldTap {
-    fn handle(&self, switch_event: &SwitchEvent) -> Option<Function> {
+impl<'a> SwitchHandle<'a> for HoldTap<'a> {
+    fn handle(&self, switch_event: &SwitchEvent) -> Option<Function<'a>> {
         match switch_event {
             SwitchEvent::Pressed(i) if *i == self.thold => Some(self.hold),
             SwitchEvent::Releasing(i) if *i < self.thold => Some(self.tap),

@@ -1,13 +1,13 @@
-use crate::switch::{Switch, SwitchEvent, SwitchState, Timestamp};
+use crate::switch::{Switch, SwitchEvent, SwitchState, Tick};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct Debouncer<const DT: Timestamp> {
+pub struct Debouncer<const DT: Tick> {
     signal: bool,
-    duration: Timestamp,
+    duration: Tick,
     state: SwitchState,
 }
 
-impl<const DT: Timestamp> Debouncer<DT> {
+impl<const DT: Tick> Debouncer<DT> {
     pub fn new() -> Debouncer<DT> {
         Debouncer {
             signal: false,
@@ -22,7 +22,7 @@ impl<const DT: Timestamp> Debouncer<DT> {
     }
 }
 
-impl<const DT: Timestamp> Switch for Debouncer<DT> {
+impl<const DT: Tick> Switch for Debouncer<DT> {
     fn update(&mut self, signal: bool) -> SwitchEvent {
         self.duration = match self.signal == signal {
             true => self.duration.saturating_add(1),

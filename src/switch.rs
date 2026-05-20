@@ -1,6 +1,6 @@
 use crate::switch_handler::SwitchHandle;
 
-pub type Timestamp = u8;
+pub type Tick = u8;
 
 pub trait Switch {
     fn update(&mut self, signal: bool) -> SwitchEvent;
@@ -8,10 +8,10 @@ pub trait Switch {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SwitchEvent {
-    Released(Timestamp),
-    Pressed(Timestamp),
-    Pressing(Timestamp),
-    Releasing(Timestamp),
+    Released(Tick),
+    Pressed(Tick),
+    Pressing(Tick),
+    Releasing(Tick),
 }
 
 impl Default for SwitchEvent {
@@ -46,8 +46,8 @@ impl SwitchEvent {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SwitchState {
-    Released(Timestamp),
-    Pressed(Timestamp),
+    Released(Tick),
+    Pressed(Tick),
 }
 
 impl SwitchState {

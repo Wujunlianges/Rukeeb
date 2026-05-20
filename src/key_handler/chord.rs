@@ -6,24 +6,24 @@ use crate::key_handler::KeyHandle;
 use crate::switch::SwitchEvent;
 use crate::switch_handler::SwitchHandle;
 
-type KeyPair = (usize, usize, usize, &'static dyn SwitchHandle); // layer, key0_idx, key1_idx
+type KeyPair<'a> = (usize, usize, usize, &'a dyn SwitchHandle<'a>); // layer, key0_idx, key1_idx
 
-pub struct Chord {
-    key_pairs: &'static [KeyPair],
+pub struct Chord<'a> {
+    key_pairs: &'a [KeyPair<'a>],
 }
 
-impl Chord {
-    pub const fn new(key_pairs: &'static [KeyPair]) -> Chord {
+impl<'a> Chord<'a> {
+    pub const fn new(key_pairs: &'a [KeyPair<'a>]) -> Chord<'a> {
         Chord { key_pairs }
     }
 }
 
-impl<const N: usize> KeyHandle<N> for Chord {
+impl<'a, const N: usize> KeyHandle<'a, N> for Chord<'a> {
     fn handle(
         &self,
         key_events: &mut [Option<KeyEvent>; N],
-        functions: &mut Vec<Function, N>,
-    ) -> Result<(), Function> {
+        functions: &mut Vec<Function<'a>, N>,
+    ) -> Result<(), Function<'a>> {
         self.key_pairs
             .iter()
             .try_for_each(|(layer, key0_idx, key1_idx, handler)| {

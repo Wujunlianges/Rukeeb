@@ -4,22 +4,22 @@ use crate::switch::SwitchEvent;
 mod holdtap;
 pub use holdtap::HoldTap;
 
-pub trait SwitchHandle: Sync {
-    fn handle(&self, switch_event: &SwitchEvent) -> Option<Function>;
+pub trait SwitchHandle<'a>: Sync {
+    fn handle(&self, switch_event: &SwitchEvent) -> Option<Function<'a>>;
 }
 
-pub struct Hold(Function);
-pub struct Tap(Function);
-pub struct OnOff(Function, Function);
+pub struct Hold<'a>(Function<'a>);
+pub struct Tap<'a>(Function<'a>);
+pub struct OnOff<'a>(Function<'a>, Function<'a>);
 
-impl Hold {
+impl<'a> Hold<'a> {
     pub const fn new(f: Function) -> Hold {
         Hold(f)
     }
 }
 
-impl SwitchHandle for Hold {
-    fn handle(&self, switch_event: &SwitchEvent) -> Option<Function> {
+impl<'a> SwitchHandle<'a> for Hold<'a> {
+    fn handle(&self, switch_event: &SwitchEvent) -> Option<Function<'a>> {
         match switch_event {
             SwitchEvent::Pressing(_) | SwitchEvent::Pressed(_) => Some(self.0),
             _ => None,
@@ -27,14 +27,14 @@ impl SwitchHandle for Hold {
     }
 }
 
-impl Tap {
+impl<'a> Tap<'a> {
     pub const fn new(f: Function) -> Tap {
         Tap(f)
     }
 }
 
-impl SwitchHandle for Tap {
-    fn handle(&self, switch_event: &SwitchEvent) -> Option<Function> {
+impl<'a> SwitchHandle<'a> for Tap<'a> {
+    fn handle(&self, switch_event: &SwitchEvent) -> Option<Function<'a>> {
         match switch_event {
             SwitchEvent::Pressing(_) => Some(self.0),
             _ => None,
@@ -42,14 +42,14 @@ impl SwitchHandle for Tap {
     }
 }
 
-impl OnOff {
-    pub const fn new(f0: Function, f1: Function) -> OnOff {
+impl<'a> OnOff<'a> {
+    pub const fn new(f0: Function<'a>, f1: Function<'a>) -> OnOff<'a> {
         OnOff(f0, f1)
     }
 }
 
-impl SwitchHandle for OnOff {
-    fn handle(&self, switch_event: &SwitchEvent) -> Option<Function> {
+impl<'a> SwitchHandle<'a> for OnOff<'a> {
+    fn handle(&self, switch_event: &SwitchEvent) -> Option<Function<'a>> {
         match switch_event {
             SwitchEvent::Pressing(_) => Some(self.0),
             SwitchEvent::Releasing(_) => Some(self.1),

@@ -7,30 +7,30 @@ use crate::switch_handler::SwitchHandle;
 mod chord;
 pub use chord::Chord;
 
-pub trait KeyHandle<const N: usize>: Sync {
+pub trait KeyHandle<'a, const N: usize>: Sync {
     fn handle(
         &self,
         key_events: &mut [Option<KeyEvent>; N],
-        functions: &mut Vec<Function, N>,
-    ) -> Result<(), Function>;
+        functions: &mut Vec<Function<'a>, N>,
+    ) -> Result<(), Function<'a>>;
 }
 
-pub struct Keymap<const N: usize> {
-    layers: &'static [&'static [&'static dyn SwitchHandle; N]],
+pub struct Keymap<'a, const N: usize> {
+    layers: &'a [&'a [&'a dyn SwitchHandle<'a>; N]],
 }
 
-impl<const N: usize> Keymap<N> {
-    pub const fn new(layers: &'static [&'static [&'static dyn SwitchHandle; N]]) -> Keymap<N> {
+impl<'a, const N: usize> Keymap<'a, N> {
+    pub const fn new(layers: &'a [&'a [&'a dyn SwitchHandle<'a>; N]]) -> Keymap<'a, N> {
         Keymap { layers }
     }
 }
 
-impl<const N: usize> KeyHandle<N> for Keymap<N> {
+impl<'a, const N: usize> KeyHandle<'a, N> for Keymap<'a, N> {
     fn handle(
         &self,
         key_events: &mut [Option<KeyEvent>; N],
-        functions: &mut Vec<Function, N>,
-    ) -> Result<(), Function> {
+        functions: &mut Vec<Function<'a>, N>,
+    ) -> Result<(), Function<'a>> {
         key_events
             .iter_mut()
             .enumerate()

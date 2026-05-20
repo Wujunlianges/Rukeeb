@@ -1,8 +1,8 @@
 use crate::report::Report;
 
 #[derive(Clone, Copy)]
-pub enum Function {
-    Report(&'static [Report]),
+pub enum Function<'a> {
+    Report(&'a [Report]),
     Layer(u8),
 }
 

@@ -1,26 +1,35 @@
 mod statics;
-use crate::statics::*;
 
+use crate::statics::*;
+use heapless::spsc::{Consumer, Queue};
+
+use rukeeb::key_handler::KeyHandle;
 use rukeeb::keyboard::Keyboard;
 use rukeeb::report::Report;
 use rukeeb::rpt as r;
 
-type Tick<'a> = (usize, &'a [usize], &'a [Report]);
+type TestCase<'a> = (usize, &'a [usize], &'a [Report]);
 
-struct Tester<const N: usize> {
+struct Tester<'a: 'b, 'b, const N: usize> {
     signals: [bool; N],
-    keyboard: Keyboard<N>,
+    keyboard: Keyboard<'a, 'b, N>,
+    consumer: Consumer<'b, Report>,
 }
 
-impl<const N: usize> Tester<N> {
-    pub fn new(keyboard: Keyboard<N>) -> Tester<N> {
+impl<'a: 'b, 'b, const N: usize> Tester<'a, 'b, N> {
+    pub fn new(
+        key_handlers: &'a [&'a dyn KeyHandle<'a, N>],
+        queue: &'b mut Queue<Report, 128>,
+    ) -> Tester<'a, 'b, N> {
+        let (producer, consumer) = queue.split();
         Tester {
             signals: [false; N],
-            keyboard,
+            keyboard: Keyboard::new(key_handlers, producer),
+            consumer,
         }
     }
 
-    pub fn tick(&mut self) -> impl IntoIterator<Item = Report> {
+    pub fn tick(&mut self) -> Result<(), Report> {
         self.keyboard.tick(&self.signals)
     }
 
@@ -33,28 +42,36 @@ impl<const N: usize> Tester<N> {
     pub fn reset(&mut self) {
         self.signals.iter_mut().for_each(|s| *s = false);
         (0..5).for_each(|_| {
-            self.keyboard.tick(&self.signals);
+            let _ = self.keyboard.tick(&self.signals);
         });
+        while let Some(_) = self.consumer.dequeue() {}
     }
 
-    pub fn test<'a>(&mut self, ticks: &[Tick<'a>]) {
+    pub fn test(&mut self, test_cases: &[TestCase<'a>]) {
         self.reset();
 
-        let tick_vec: Vec<Option<(&[usize], &[Report])>> = ticks.iter().fold(
-            vec![None; ticks[ticks.len() - 1].0 + 1],
+        let test_cases: Vec<Option<(&[usize], &[Report])>> = test_cases.iter().fold(
+            vec![None; test_cases[test_cases.len() - 1].0 + 1],
             |mut acc, (time, input, expected_output)| {
                 acc[*time] = Some((*input, *expected_output));
                 acc
             },
         );
         let mut timer = 0;
-        tick_vec.into_iter().for_each(|tick| {
-            if let Some((input, _)) = tick {
+        test_cases.into_iter().for_each(|test_case| {
+            if let Some((input, _)) = test_case {
                 self.update(input);
             }
-            let output: Vec<Report> = self.tick().into_iter().collect();
-            if let Some((_, expected_output)) = tick {
-                assert!(output.eq(&expected_output), "Error at time {}", timer);
+            let _ = self.tick();
+            let mut output = Vec::new();
+            while let Some(report) = self.consumer.dequeue() {
+                output.push(report);
+            }
+            if let Some((_, expected_output)) = test_case {
+                let mut expected_output = expected_output.to_vec();
+                output.sort();
+                expected_output.sort();
+                assert_eq!(output, expected_output, "Timestamp: {:?}", timer);
             }
             timer += 1;
         });
@@ -63,9 +80,9 @@ impl<const N: usize> Tester<N> {
 
 #[test]
 fn test() {
-    let keyboard: Keyboard<N> = Keyboard::new(&KEY_HANDLERS);
+    let mut queue = Queue::<Report, 128>::new();
 
-    let mut tester = Tester::new(keyboard);
+    let mut tester = Tester::new(&KEY_HANDLERS, &mut queue);
 
     // DT is 5
 
