@@ -1,18 +1,16 @@
 use heapless::spsc::Producer;
 
-use crate::action::Action;
 use crate::action_handler::ActionHandler;
 use crate::debouncer::Debouncer;
 use crate::key::KeyEvent;
-use crate::key_handler::{HandleKeyEvent, Keymap};
+use crate::key_handler::HandleKeyEvent;
 use crate::report::Report;
 use crate::switch::{Switch, SwitchEvent, Tick};
-use crate::switch_handler::HandleSwitchEvent;
 
 const DT: Tick = 5;
 
 pub struct Keyboard<'a: 'b, 'b, const N: usize> {
-    debouncers: [Debouncer<DT>; N],
+    debouncers: [Debouncer<DT>; N], // todo: this should be a trait
     switch_events: [SwitchEvent; N],
     key_layers: [usize; N],
     key_events: [Option<KeyEvent>; N],

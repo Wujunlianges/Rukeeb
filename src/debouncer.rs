@@ -7,6 +7,12 @@ pub struct Debouncer<const DT: Tick> {
     state: SwitchState,
 }
 
+impl<const DT: Tick> Default for Debouncer<DT> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl<const DT: Tick> Debouncer<DT> {
     pub fn new() -> Debouncer<DT> {
         Debouncer {

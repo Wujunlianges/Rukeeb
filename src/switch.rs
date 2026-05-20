@@ -1,5 +1,3 @@
-use crate::switch_handler::HandleSwitchEvent;
-
 pub type Tick = u8;
 
 pub trait Switch {
@@ -15,14 +13,14 @@ pub enum SwitchEvent {
 }
 
 impl Default for SwitchEvent {
-    fn default() -> SwitchEvent {
-        SwitchEvent::Released(0)
+    fn default() -> Self {
+        Self::new()
     }
 }
 
 impl SwitchEvent {
     pub fn new() -> SwitchEvent {
-        Default::default()
+        SwitchEvent::Released(0)
     }
     pub fn is_release(&self) -> bool {
         matches!(*self, SwitchEvent::Released(_) | SwitchEvent::Releasing(_))
