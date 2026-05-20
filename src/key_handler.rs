@@ -4,7 +4,9 @@ use crate::report::Report;
 use crate::switch_handler::HandleSwitchEvent;
 
 mod chord;
+mod combo;
 pub use chord::Chord;
+pub use combo::Combo;
 
 pub trait HandleKeyEvent<'a, const N: usize>: Sync {
     fn handle(

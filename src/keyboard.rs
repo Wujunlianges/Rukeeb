@@ -10,7 +10,7 @@ use crate::switch::{Switch, SwitchEvent, Tick};
 const DT: Tick = 5;
 
 pub struct Keyboard<'a: 'b, 'b, const N: usize> {
-    debouncers: [Debouncer<DT>; N], // todo: this should be a trait
+    switches: [Debouncer<DT>; N], // todo: this should be a trait
     switch_events: [SwitchEvent; N],
     key_layers: [usize; N],
     key_events: [Option<KeyEvent>; N],
@@ -24,7 +24,7 @@ impl<'a: 'b, 'b, const N: usize> Keyboard<'a, 'b, N> {
         producer: Producer<'b, Report>,
     ) -> Keyboard<'a, 'b, N> {
         Keyboard {
-            debouncers: [Debouncer::<DT>::new(); N],
+            switches: [Debouncer::<DT>::new(); N],
             switch_events: [SwitchEvent::new(); N],
             key_layers: [0; N],
             key_events: [None; N],
@@ -36,9 +36,9 @@ impl<'a: 'b, 'b, const N: usize> Keyboard<'a, 'b, N> {
     pub fn tick(&mut self, signals: &[bool; N]) -> Result<(), Report> {
         self.switch_events
             .iter_mut()
-            .zip(self.debouncers.iter_mut().zip(signals.iter()))
-            .for_each(|(switch_event, (debouncer, signal))| {
-                *switch_event = debouncer.update(*signal);
+            .zip(self.switches.iter_mut().zip(signals.iter()))
+            .for_each(|(switch_event, (switch, signal))| {
+                *switch_event = switch.update(*signal);
             });
 
         self.key_events

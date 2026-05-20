@@ -47,7 +47,7 @@ impl<'a, const N: usize> HandleKeyEvent<'a, N> for Chord<'a> {
 }
 
 #[macro_export]
-macro_rules! chrd {
+macro_rules! chord {
     ([$(($l: literal, $k0: literal, $k1: literal, $switch_handler: expr)),+ $(,)?]) => {
         $crate::key_handler::Chord::new(&[$(($l, $k0, $k1, &$switch_handler)),+])
     };
