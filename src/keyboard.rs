@@ -1,13 +1,13 @@
 use heapless::spsc::Producer;
 use heapless::vec::Vec;
 
+use crate::action::Action;
 use crate::debouncer::Debouncer;
-use crate::function::Function;
 use crate::key::KeyEvent;
-use crate::key_handler::{KeyHandle, Keymap};
+use crate::key_handler::{HandleKeyEvent, Keymap};
 use crate::report::Report;
 use crate::switch::{Switch, SwitchEvent, Tick};
-use crate::switch_handler::SwitchHandle;
+use crate::switch_handler::HandleSwitchEvent;
 
 const DT: Tick = 5;
 
@@ -17,14 +17,14 @@ pub struct Keyboard<'a: 'b, 'b, const N: usize> {
     switch_events: [SwitchEvent; N],
     key_layers: [usize; N],
     key_events: [Option<KeyEvent>; N],
-    functions: Vec<Function<'a>, N>,
-    key_handlers: &'a [&'a dyn KeyHandle<'a, N>],
+    actions: Vec<Action<'a>, N>,
+    key_handlers: &'a [&'a dyn HandleKeyEvent<'a, N>],
     producer: Producer<'b, Report>,
 }
 
 impl<'a: 'b, 'b, const N: usize> Keyboard<'a, 'b, N> {
     pub fn new(
-        key_handlers: &'a [&'a dyn KeyHandle<'a, N>],
+        key_handlers: &'a [&'a dyn HandleKeyEvent<'a, N>],
         producer: Producer<'b, Report>,
     ) -> Keyboard<'a, 'b, N> {
         Keyboard {
@@ -33,7 +33,7 @@ impl<'a: 'b, 'b, const N: usize> Keyboard<'a, 'b, N> {
             switch_events: [SwitchEvent::new(); N],
             key_layers: [0; N],
             key_events: [None; N],
-            functions: Vec::new(),
+            actions: Vec::new(),
             key_handlers,
             producer,
         }
@@ -60,21 +60,21 @@ impl<'a: 'b, 'b, const N: usize> Keyboard<'a, 'b, N> {
             });
 
         self.key_handlers.iter().for_each(|key_handler| {
-            let _ = key_handler.handle(&mut self.key_events, &mut self.functions);
+            let _ = key_handler.handle(&mut self.key_events, &mut self.actions);
         });
 
         let mut reports: Vec<Report, N> = Vec::new();
-        self.functions.iter().for_each(|function| match function {
-            Function::Report(report) => reports.extend(report.iter().cloned()),
-            Function::Layer(n_layer) => self.layer = *n_layer as usize,
+        self.actions.iter().for_each(|action| match action {
+            Action::Report(report) => reports.extend(report.iter().cloned()),
+            Action::Layer(n_layer) => self.layer = *n_layer as usize,
         });
 
-        while let Some(function) = self.functions.pop() {
-            match function {
-                Function::Report(report) => report
+        while let Some(action) = self.actions.pop() {
+            match action {
+                Action::Report(report) => report
                     .iter()
                     .try_for_each(|r| self.producer.enqueue(r.clone()))?,
-                Function::Layer(n_layer) => self.layer = n_layer as usize,
+                Action::Layer(n_layer) => self.layer = n_layer as usize,
             }
         }
 

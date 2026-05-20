@@ -5,7 +5,7 @@
 extern crate alloc;
 
 pub mod debouncer;
-pub mod function;
+pub mod action;
 pub mod key;
 pub mod key_handler;
 pub mod keyboard;

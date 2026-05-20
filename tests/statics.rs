@@ -1,4 +1,4 @@
-use rukeeb::key_handler::{Chord, KeyHandle, Keymap};
+use rukeeb::key_handler::{Chord, HandleKeyEvent, Keymap};
 use rukeeb::*;
 
 pub const N: usize = 6;
@@ -24,4 +24,4 @@ static KEYMAP: Keymap<N> = keymap!(
     ]
 );
 
-pub static KEY_HANDLERS: [&'static dyn KeyHandle<N>; 2] = [&CHORD, &KEYMAP];
+pub static KEY_HANDLERS: [&'static dyn HandleKeyEvent<N>; 2] = [&CHORD, &KEYMAP];

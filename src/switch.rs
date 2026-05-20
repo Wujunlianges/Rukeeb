@@ -1,4 +1,4 @@
-use crate::switch_handler::SwitchHandle;
+use crate::switch_handler::HandleSwitchEvent;
 
 pub type Tick = u8;
 

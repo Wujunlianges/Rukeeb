@@ -1,7 +1,7 @@
 use crate::report::Report;
 
 #[derive(Clone, Copy)]
-pub enum Function<'a> {
+pub enum Action<'a> {
     Report(&'a [Report]),
     Layer(u8),
 }
@@ -10,7 +10,7 @@ pub enum Function<'a> {
 #[macro_export]
 macro_rules! k {
     ($($x: tt),* $(,)?) => {
-        $crate::function::Function::Report(
+        $crate::action::Action::Report(
             &[$($crate::rpt!($x)),*]
         )
     };
@@ -20,6 +20,6 @@ macro_rules! k {
 #[macro_export]
 macro_rules! l {
     ($x: tt) => {
-        $crate::function::Function::Layer($x)
+        $crate::action::Action::Layer($x)
     };
 }

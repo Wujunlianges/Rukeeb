@@ -1,43 +1,43 @@
 use heapless::Vec;
 
-use crate::function::Function;
+use crate::action::Action;
 use crate::key::KeyEvent;
-use crate::switch_handler::SwitchHandle;
+use crate::switch_handler::HandleSwitchEvent;
 
 mod chord;
 pub use chord::Chord;
 
-pub trait KeyHandle<'a, const N: usize>: Sync {
+pub trait HandleKeyEvent<'a, const N: usize>: Sync {
     fn handle(
         &self,
         key_events: &mut [Option<KeyEvent>; N],
-        functions: &mut Vec<Function<'a>, N>,
-    ) -> Result<(), Function<'a>>;
+        actions: &mut Vec<Action<'a>, N>,
+    ) -> Result<(), Action<'a>>;
 }
 
 pub struct Keymap<'a, const N: usize> {
-    layers: &'a [&'a [&'a dyn SwitchHandle<'a>; N]],
+    layers: &'a [&'a [&'a dyn HandleSwitchEvent<'a>; N]],
 }
 
 impl<'a, const N: usize> Keymap<'a, N> {
-    pub const fn new(layers: &'a [&'a [&'a dyn SwitchHandle<'a>; N]]) -> Keymap<'a, N> {
+    pub const fn new(layers: &'a [&'a [&'a dyn HandleSwitchEvent<'a>; N]]) -> Keymap<'a, N> {
         Keymap { layers }
     }
 }
 
-impl<'a, const N: usize> KeyHandle<'a, N> for Keymap<'a, N> {
+impl<'a, const N: usize> HandleKeyEvent<'a, N> for Keymap<'a, N> {
     fn handle(
         &self,
         key_events: &mut [Option<KeyEvent>; N],
-        functions: &mut Vec<Function<'a>, N>,
-    ) -> Result<(), Function<'a>> {
+        actions: &mut Vec<Action<'a>, N>,
+    ) -> Result<(), Action<'a>> {
         key_events
             .iter_mut()
             .enumerate()
             .try_for_each(|(idx, key_event)| {
                 if let Some((key_layer, switch_event)) = key_event {
-                    if let Some(function) = self.layers[*key_layer][idx].handle(switch_event) {
-                        functions.push(function)?;
+                    if let Some(action) = self.layers[*key_layer][idx].handle(switch_event) {
+                        actions.push(action)?;
                     }
                     *key_event = None;
                 }
