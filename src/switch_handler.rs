@@ -4,8 +4,8 @@ use crate::switch::SwitchEvent;
 mod holdtap;
 pub use holdtap::HoldTap;
 
-pub trait HandleSwitchEvent<'a>: Sync {
-    fn handle(&self, switch_event: &SwitchEvent) -> Option<Action<'a>>;
+pub trait HandleSwitchEvent: Sync {
+    fn handle(&self, switch_event: &SwitchEvent) -> Option<Action<'_>>;
 }
 
 pub struct Hold<'a>(Action<'a>);
@@ -18,7 +18,7 @@ impl<'a> Hold<'a> {
     }
 }
 
-impl<'a> HandleSwitchEvent<'a> for Hold<'a> {
+impl<'a> HandleSwitchEvent for Hold<'a> {
     fn handle(&self, switch_event: &SwitchEvent) -> Option<Action<'a>> {
         match switch_event {
             SwitchEvent::Pressing(_) | SwitchEvent::Pressed(_) => Some(self.0),
@@ -33,7 +33,7 @@ impl<'a> Tap<'a> {
     }
 }
 
-impl<'a> HandleSwitchEvent<'a> for Tap<'a> {
+impl<'a> HandleSwitchEvent for Tap<'a> {
     fn handle(&self, switch_event: &SwitchEvent) -> Option<Action<'a>> {
         match switch_event {
             SwitchEvent::Pressing(_) => Some(self.0),
@@ -48,7 +48,7 @@ impl<'a> OnOff<'a> {
     }
 }
 
-impl<'a> HandleSwitchEvent<'a> for OnOff<'a> {
+impl<'a> HandleSwitchEvent for OnOff<'a> {
     fn handle(&self, switch_event: &SwitchEvent) -> Option<Action<'a>> {
         match switch_event {
             SwitchEvent::Pressing(_) => Some(self.0),

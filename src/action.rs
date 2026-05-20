@@ -2,7 +2,7 @@ use crate::report::Report;
 
 #[derive(Clone, Copy)]
 pub enum Action<'a> {
-    Report(&'a [Report]),
+    Report(&'a [Report]), // todo: make it Report only.
     Layer(u8),
 }
 

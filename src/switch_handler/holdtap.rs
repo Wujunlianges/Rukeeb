@@ -14,7 +14,7 @@ impl<'a> HoldTap<'a> {
     }
 }
 
-impl<'a> HandleSwitchEvent<'a> for HoldTap<'a> {
+impl<'a> HandleSwitchEvent for HoldTap<'a> {
     fn handle(&self, switch_event: &SwitchEvent) -> Option<Action<'a>> {
         match switch_event {
             SwitchEvent::Pressed(i) if *i == self.thold => Some(self.hold),

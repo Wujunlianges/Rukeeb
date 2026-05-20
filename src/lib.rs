@@ -4,8 +4,9 @@
 
 extern crate alloc;
 
-pub mod debouncer;
 pub mod action;
+pub mod action_handler;
+pub mod debouncer;
 pub mod key;
 pub mod key_handler;
 pub mod keyboard;

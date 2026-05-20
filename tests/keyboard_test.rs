@@ -47,7 +47,7 @@ impl<'a: 'b, 'b, const N: usize> Tester<'a, 'b, N> {
         while let Some(_) = self.consumer.dequeue() {}
     }
 
-    pub fn test(&mut self, test_cases: &[TestCase<'a>]) {
+    pub fn test(&mut self, test_cases: &[TestCase]) {
         self.reset();
 
         let test_cases: Vec<Option<(&[usize], &[Report])>> = test_cases.iter().fold(
