@@ -1,21 +1,54 @@
 use crate::switch::{Switch, SwitchEvent, SwitchState, Tick};
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct Debouncer<const DT: Tick> {
-    signal: bool,
-    duration: Tick,
-    state: SwitchState,
+pub trait Debounce<const N: usize> {
+    fn debounce(&mut self, signals: &[bool; N], switch_events: &mut [SwitchEvent; N]);
 }
 
-impl<const DT: Tick> Default for Debouncer<DT> {
+pub struct ThresholdDebouncer<const N: usize, const DT: u8> {
+    switches: [ThresholdDebounceSwitch<DT>; N],
+}
+
+impl<const N: usize, const DT: u8> Default for ThresholdDebouncer<N, DT> {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl<const DT: Tick> Debouncer<DT> {
-    pub fn new() -> Debouncer<DT> {
-        Debouncer {
+impl<const N: usize, const DT: u8> ThresholdDebouncer<N, DT> {
+    pub fn new() -> ThresholdDebouncer<N, DT> {
+        ThresholdDebouncer {
+            switches: [ThresholdDebounceSwitch::new(); N],
+        }
+    }
+}
+
+impl<const N: usize, const DT: u8> Debounce<N> for ThresholdDebouncer<N, DT> {
+    fn debounce(&mut self, signals: &[bool; N], switch_events: &mut [SwitchEvent; N]) {
+        switch_events
+            .iter_mut()
+            .zip(self.switches.iter_mut().zip(signals.iter()))
+            .for_each(|(switch_event, (switch, signal))| {
+                *switch_event = switch.update(*signal);
+            });
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ThresholdDebounceSwitch<const DT: Tick> {
+    signal: bool,
+    duration: Tick,
+    state: SwitchState,
+}
+
+impl<const DT: Tick> Default for ThresholdDebounceSwitch<DT> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl<const DT: Tick> ThresholdDebounceSwitch<DT> {
+    pub fn new() -> ThresholdDebounceSwitch<DT> {
+        ThresholdDebounceSwitch {
             signal: false,
             duration: 0,
             state: SwitchState::Released(0),
@@ -28,7 +61,7 @@ impl<const DT: Tick> Debouncer<DT> {
     }
 }
 
-impl<const DT: Tick> Switch for Debouncer<DT> {
+impl<const DT: Tick> Switch for ThresholdDebounceSwitch<DT> {
     fn update(&mut self, signal: bool) -> SwitchEvent {
         self.duration = match self.signal == signal {
             true => self.duration.saturating_add(1),
@@ -49,7 +82,7 @@ mod test {
 
     #[test]
     fn hold() {
-        let mut debouncer = Debouncer::<5>::new();
+        let mut debouncer = ThresholdDebounceSwitch::<5>::new();
 
         (1..=10).for_each(|i| {
             assert_eq!(debouncer.update(false), SwitchEvent::Released(i));
@@ -70,7 +103,7 @@ mod test {
 
     #[test]
     fn wobble() {
-        let mut debouncer = Debouncer::<5>::new();
+        let mut debouncer = ThresholdDebounceSwitch::<5>::new();
 
         (1..=10).for_each(|i| {
             debouncer.update(false);
@@ -84,7 +117,7 @@ mod test {
 
     #[test]
     fn no_debounce() {
-        let mut debouncer = Debouncer::<0>::new();
+        let mut debouncer = ThresholdDebounceSwitch::<0>::new();
 
         assert_eq!(debouncer.update(true), SwitchEvent::Pressing(0));
         (1..=10).for_each(|i| {

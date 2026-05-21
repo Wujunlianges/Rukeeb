@@ -3,6 +3,7 @@ mod statics;
 use crate::statics::*;
 use heapless::spsc::{Consumer, Queue};
 
+use rukeeb::debouncer::{Debounce, ThresholdDebouncer};
 use rukeeb::key_handler::HandleKeyEvent;
 use rukeeb::keyboard::Keyboard;
 use rukeeb::report::Report;
@@ -18,13 +19,14 @@ struct Tester<'a: 'b, 'b, const N: usize> {
 
 impl<'a: 'b, 'b, const N: usize> Tester<'a, 'b, N> {
     pub fn new(
+        debouncer: &'b mut dyn Debounce<N>,
         key_handlers: &'a [&'a dyn HandleKeyEvent<'a, N>],
         queue: &'b mut Queue<Report, 128>,
     ) -> Tester<'a, 'b, N> {
         let (producer, consumer) = queue.split();
         Tester {
             signals: [false; N],
-            keyboard: Keyboard::new(key_handlers, producer),
+            keyboard: Keyboard::new(debouncer, key_handlers, producer),
             consumer,
         }
     }
@@ -81,8 +83,9 @@ impl<'a: 'b, 'b, const N: usize> Tester<'a, 'b, N> {
 #[test]
 fn test() {
     let mut queue = Queue::<Report, 128>::new();
+    let mut debouncer = ThresholdDebouncer::<N, 5>::new();
 
-    let mut tester = Tester::new(&KEY_HANDLERS, &mut queue);
+    let mut tester = Tester::new(&mut debouncer, &KEY_HANDLERS, &mut queue);
 
     // DT is 5
 

@@ -1,45 +1,39 @@
 use heapless::spsc::Producer;
 
 use crate::action_handler::ActionHandler;
-use crate::debouncer::Debouncer;
+use crate::debouncer::Debounce;
 use crate::key::KeyEvent;
 use crate::key_handler::HandleKeyEvent;
 use crate::report::Report;
-use crate::switch::{Switch, SwitchEvent, Tick};
-
-const DT: Tick = 5;
+use crate::switch::SwitchEvent;
 
 pub struct Keyboard<'a: 'b, 'b, const N: usize> {
-    switches: [Debouncer<DT>; N], // todo: this should be a trait
+    debouncer: &'b mut dyn Debounce<N>,
+    key_handlers: &'a [&'a dyn HandleKeyEvent<'a, N>],
+    action_handler: ActionHandler<'b>,
     switch_events: [SwitchEvent; N],
     key_layers: [usize; N],
     key_events: [Option<KeyEvent>; N],
-    key_handlers: &'a [&'a dyn HandleKeyEvent<'a, N>],
-    action_handler: ActionHandler<'b>,
 }
 
 impl<'a: 'b, 'b, const N: usize> Keyboard<'a, 'b, N> {
     pub fn new(
+        debouncer: &'b mut dyn Debounce<N>,
         key_handlers: &'a [&'a dyn HandleKeyEvent<'a, N>],
         producer: Producer<'b, Report>,
     ) -> Keyboard<'a, 'b, N> {
         Keyboard {
-            switches: [Debouncer::<DT>::new(); N],
+            debouncer,
+            key_handlers,
+            action_handler: ActionHandler::new(producer),
             switch_events: [SwitchEvent::new(); N],
             key_layers: [0; N],
             key_events: [None; N],
-            key_handlers,
-            action_handler: ActionHandler::new(producer),
         }
     }
 
     pub fn tick(&mut self, signals: &[bool; N]) -> Result<(), Report> {
-        self.switch_events
-            .iter_mut()
-            .zip(self.switches.iter_mut().zip(signals.iter()))
-            .for_each(|(switch_event, (switch, signal))| {
-                *switch_event = switch.update(*signal);
-            });
+        self.debouncer.debounce(signals, &mut self.switch_events);
 
         self.key_events
             .iter_mut()
