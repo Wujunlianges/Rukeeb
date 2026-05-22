@@ -18,7 +18,7 @@ static KEYMAP: Keymap<N> = keymap!(
             lt!(2), lt!(0);
         ],
         [
-            kh!(C), kh!(C); // this is overridden by combo
+            kh!(C), kh!(Z); // this is overridden by combo
             kh!(C), kh!(C);
             kh!(C), lt!(0);
         ]

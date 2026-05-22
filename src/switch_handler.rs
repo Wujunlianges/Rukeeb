@@ -21,7 +21,7 @@ impl Hold {
 impl HandleSwitchEvent for Hold {
     fn handle(&self, switch_event: &SwitchEvent) -> Option<Action> {
         match switch_event {
-            SwitchEvent::Pressing(_) | SwitchEvent::Pressed(_) => Some(self.0),
+            SwitchEvent::Pressed(_) | SwitchEvent::Pressing(_) => Some(self.0),
             _ => None,
         }
     }

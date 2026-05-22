@@ -25,18 +25,17 @@ impl<'a, const N: usize> HandleKeyEvent<'a, N> for Combo<'a> {
         self.combo_handlers
             .iter()
             .try_for_each(|(layer, idx, switch_handlers)| {
-                if let Some((key_layer, switch_event)) = key_events[*idx]
-                    && *layer == key_layer
-                {
-                    switch_handlers.iter().try_for_each(|switch_handler| {
-                        if let Some(action) = switch_handler.handle(&switch_event) {
-                            action_handler.handle(action)?;
-                        }
-                        Ok(())
-                    })?;
-                    key_events[*idx] = None;
-                }
-                Ok(())
+                key_events[*idx]
+                    .take_if(|(key_layer, _)| *key_layer == *layer)
+                    .map(|(_, switch_event)| {
+                        switch_handlers.iter().try_for_each(|switch_handler| {
+                            switch_handler
+                                .handle(&switch_event)
+                                .map(|action| action_handler.handle(action))
+                                .unwrap_or(Ok(()))
+                        })
+                    })
+                    .unwrap_or(Ok(()))
             })
     }
 }

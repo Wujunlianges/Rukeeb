@@ -36,13 +36,15 @@ impl<'a, const N: usize> HandleKeyEvent<'a, N> for Keymap<'a, N> {
             .iter_mut()
             .enumerate()
             .try_for_each(|(idx, key_event)| {
-                if let Some((key_layer, switch_event)) = key_event {
-                    if let Some(action) = self.layers[*key_layer][idx].handle(switch_event) {
-                        action_handler.handle(action)?;
-                    }
-                    *key_event = None;
-                }
-                Ok(())
+                key_event
+                    .take()
+                    .map(|(key_layer, switch_event)| {
+                        self.layers[key_layer][idx]
+                            .handle(&switch_event)
+                            .map(|action| action_handler.handle(action))
+                            .unwrap_or(Ok(()))
+                    })
+                    .unwrap_or(Ok(()))
             })
     }
 }

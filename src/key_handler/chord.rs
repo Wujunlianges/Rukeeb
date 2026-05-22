@@ -22,27 +22,34 @@ impl<'a, const N: usize> HandleKeyEvent<'a, N> for Chord<'a> {
         key_events: &mut [Option<KeyEvent>; N],
         action_handler: &mut dyn HandleAction,
     ) -> Result<(), Report> {
-        self.chord_handlers.iter().try_for_each(
-            |(layer, key0_idx, key1_idx, switch_handler)| match (
-                key_events[*key0_idx],
-                key_events[*key1_idx],
-            ) {
-                (Some((key_layer0, switch_event0)), Some((key_layer1, switch_event1))) => {
-                    if *layer == key_layer0 && *layer == key_layer1 {
-                        if let Some(action) = switch_handler.handle(&switch_event0) {
-                            action_handler.handle(action)?;
-                        }
-                        if let Some(action) = switch_handler.handle(&switch_event1) {
-                            action_handler.handle(action)?;
-                        }
-                        key_events[*key0_idx] = None;
-                        key_events[*key1_idx] = None;
-                    }
-                    Ok(())
+        self.chord_handlers
+            .iter()
+            .try_for_each(|(layer, key0_idx, key1_idx, switch_handler)| {
+                if key_events[*key0_idx].is_some_and(|(key_layer, _)| key_layer == *layer)
+                    && key_events[*key1_idx].is_some_and(|(key_layer, _)| key_layer == *layer)
+                {
+                    key_events[*key0_idx]
+                        .take()
+                        .map(|(_, switch_event)| {
+                            switch_handler
+                                .handle(&switch_event)
+                                .map(|action| action_handler.handle(action))
+                                .unwrap_or(Ok(()))
+                        })
+                        .unwrap_or(Ok(()))?;
+
+                    key_events[*key1_idx]
+                        .take()
+                        .map(|(_, switch_event)| {
+                            switch_handler
+                                .handle(&switch_event)
+                                .map(|action| action_handler.handle(action))
+                                .unwrap_or(Ok(()))
+                        })
+                        .unwrap_or(Ok(()))?;
                 }
-                _ => Ok(()),
-            },
-        )
+                Ok(())
+            })
     }
 }
 

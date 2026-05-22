@@ -61,20 +61,20 @@ impl<'a: 'b, 'b, const N: usize> Tester<'a, 'b, N> {
         );
         let mut timer = 0;
         test_cases.into_iter().for_each(|test_case| {
-            if let Some((input, _)) = test_case {
-                self.update(input);
-            }
+            test_case.map(|(input, _)| self.update(input));
             let _ = self.tick();
             let mut output = Vec::new();
             while let Some(report) = self.consumer.dequeue() {
                 output.push(report);
             }
-            if let Some((_, expected_output)) = test_case {
+
+            test_case.map(|(_, expected_output)| {
                 let mut expected_output = expected_output.to_vec();
                 output.sort();
                 expected_output.sort();
                 assert_eq!(output, expected_output, "Timestamp: {:?}", timer);
-            }
+            });
+
             timer += 1;
         });
     }
